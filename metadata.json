@@ -1,0 +1,7 @@
+{
+  "name": "WohnprojektGuide",
+  "description": "Der zentrale Wissens- und Orientierungsort für gemeinschaftliches Wohnen. Ein KI-gestützter Guide für Hausordnungen, Verträge und Beschlüsse.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

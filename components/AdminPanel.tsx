@@ -1,0 +1,420 @@
+
+import React, { useState, useCallback, useRef } from 'react';
+import { Document as AppDocument, User, Role, UserStatus } from '../types';
+import { PlusIcon, TrashIcon, DocIcon, CloseIcon, UserPlusIcon, CheckCircleIcon, ClockIcon, AlertIcon, ShieldIcon, ArrowRightIcon } from './Icons';
+import { gemini } from '../services/geminiService';
+import * as mammoth from 'mammoth';
+import * as pdfjs from 'pdfjs-dist';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs`;
+
+interface AdminPanelProps {
+  documents: AppDocument[];
+  users: User[];
+  onAddDoc: (doc: AppDocument) => void;
+  onRemoveDoc: (id: string) => void;
+  onInviteUser: (email: string, role: Role, content: string) => void;
+  onRemoveUser: (id: string) => void;
+  onUpdateUserStatus?: (id: string, status: UserStatus) => void;
+  activeTab: 'docs' | 'users';
+  setActiveTab: (tab: 'docs' | 'users') => void;
+}
+
+const AdminPanel: React.FC<AdminPanelProps> = ({ 
+  documents, users, onAddDoc, onRemoveDoc, onInviteUser, onRemoveUser, onUpdateUserStatus, activeTab, setActiveTab 
+}) => {
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteStep, setInviteStep] = useState<'input' | 'preview' | 'verifying'>('input');
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  
+  // Invite State
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<Role>(Role.USER);
+  const [aiDraft, setAiDraft] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<{ success: boolean; reason: string } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const parseDocx = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  };
+
+  const parsePdf = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    return fullText;
+  };
+
+  const handleFiles = async (files: FileList) => {
+    setIsDragging(false);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const type = file.name.split('.').pop()?.toLowerCase();
+      
+      if (type !== 'pdf' && type !== 'docx') {
+        alert(`Dateityp .${type} wird nicht unterstützt. Bitte lade nur .pdf oder .docx hoch.`);
+        continue;
+      }
+
+      setUploadProgress(`Lese ${file.name}...`);
+      try {
+        const text = type === 'pdf' ? await parsePdf(file) : await parseDocx(file);
+        
+        const newDoc: AppDocument = {
+          id: Math.random().toString(36).substr(2, 9),
+          name: file.name,
+          category: file.name.toLowerCase().includes('vertrag') ? 'Verträge' : 'Hausordnung',
+          uploadDate: new Date().toLocaleDateString('de-DE'),
+          content: text,
+          status: 'aktiv'
+        };
+        
+        onAddDoc(newDoc);
+      } catch (err) {
+        console.error("Fehler beim Verarbeiten:", err);
+        alert(`Fehler beim Einlesen von ${file.name}`);
+      }
+    }
+    setUploadProgress(null);
+  };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files) {
+      handleFiles(e.dataTransfer.files);
+    }
+  }, []);
+
+  const handlePrepareInvitation = async () => {
+    if (!inviteEmail.includes('@')) return;
+    setIsProcessing(true);
+    try {
+      const draft = await gemini.generateInvitation(inviteEmail, inviteRole, documents);
+      setAiDraft(draft);
+      setInviteStep('preview');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleFinalizeInvite = async () => {
+    setInviteStep('verifying');
+    setIsProcessing(true);
+    const verification = await gemini.verifyUser(inviteEmail);
+    setVerificationResult(verification);
+    setTimeout(() => {
+      if (verification.success) {
+        onInviteUser(inviteEmail, inviteRole, aiDraft);
+        setShowInviteModal(false);
+        resetInvite();
+      }
+      setIsProcessing(false);
+    }, 2000);
+  };
+
+  const resetInvite = () => {
+    setInviteStep('input');
+    setInviteEmail('');
+    setAiDraft('');
+    setVerificationResult(null);
+  };
+
+  const getStatusIcon = (status: UserStatus) => {
+    switch (status) {
+      case 'aktiv': return <ShieldIcon className="w-5 h-5 text-blue-500" />;
+      case 'eingeladen': return <ClockIcon className="w-5 h-5 text-gray-300" />;
+      case 'deaktiviert': return <AlertIcon className="w-5 h-5 text-red-400" />;
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-white overflow-hidden">
+      {/* Sticky Tab Header */}
+      <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-100">
+        <div className="max-w-4xl mx-auto px-6 pt-10">
+          <div className="flex gap-8">
+            {['docs', 'users'].map(tab => (
+              <button 
+                key={tab}
+                onClick={() => setActiveTab(tab as any)}
+                className={`pb-4 text-sm font-black uppercase tracking-[0.2em] relative transition-colors ${activeTab === tab ? 'text-black' : 'text-gray-300 hover:text-black'}`}
+              >
+                {tab === 'docs' ? 'Wissensbasis' : 'Mitglieder'}
+                {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        <div className="max-w-4xl mx-auto py-10 px-6 animate-in fade-in duration-500">
+          
+          {activeTab === 'docs' && (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Ziehe Dokumente (.pdf, .docx) hierher, um das Hauswissen zu füttern.</p>
+                </div>
+              </div>
+
+              {/* Drag and Drop Zone */}
+              <div 
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`relative group cursor-pointer transition-all duration-500 border-2 border-dashed rounded-[3rem] p-16 flex flex-col items-center justify-center text-center ${
+                  isDragging 
+                  ? 'border-black bg-gray-50 scale-[0.98]' 
+                  : 'border-gray-100 hover:border-black/20 hover:bg-gray-50/50'
+                }`}
+              >
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  multiple 
+                  accept=".pdf,.docx" 
+                  onChange={(e) => e.target.files && handleFiles(e.target.files)}
+                />
+                <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mb-6 transition-all ${isDragging ? 'bg-black text-white scale-110 rotate-12' : 'bg-gray-50 text-gray-300 group-hover:bg-black group-hover:text-white'}`}>
+                  {uploadProgress ? (
+                    <div className="w-8 h-8 border-4 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <PlusIcon className="w-10 h-10" />
+                  )}
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  {uploadProgress || 'Dateien hier ablegen'}
+                </h3>
+                <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
+                  Lade Hausordnungen, Verträge oder Beschlüsse als PDF oder Word hoch. Die KI liest sie automatisch ein.
+                </p>
+              </div>
+
+              {documents.length > 0 && (
+                <div className="pt-10 space-y-4">
+                  <div className="flex items-center gap-2 mb-6">
+                    <div className="w-1.5 h-1.5 bg-black rounded-full" />
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Aktives Wissen ({documents.length})</h4>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {documents.map(doc => (
+                      <div key={doc.id} className="bg-white border border-gray-100 rounded-[2.5rem] p-7 shadow-sm group hover:shadow-xl transition-all flex flex-col justify-between h-52 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex items-start justify-between">
+                          <div className="p-3 bg-gray-50 rounded-xl group-hover:bg-black group-hover:text-white transition-all">
+                            <DocIcon className="w-6 h-6" />
+                          </div>
+                          <button onClick={(e) => { e.stopPropagation(); onRemoveDoc(doc.id); }} className="p-2 text-gray-200 hover:text-red-500 transition-colors">
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 line-clamp-2 leading-tight">{doc.name}</h3>
+                          <div className="flex items-center gap-2 mt-2">
+                             <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">{doc.category}</span>
+                             <span className="text-[8px] text-gray-300 italic">{doc.uploadDate}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'users' && (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-sm text-gray-400">Einladungen werden von der KI verifiziert.</p>
+                </div>
+                <button 
+                  onClick={() => setShowInviteModal(true)}
+                  className="bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-gray-800 transition-all active:scale-95 shadow-lg shadow-black/10"
+                >
+                  <UserPlusIcon className="w-5 h-5" />
+                  Neu einladen
+                </button>
+              </div>
+
+              <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-sm">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50/50">
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Profil</th>
+                      <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
+                      <th className="px-8 py-5"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {users.map(user => (
+                      <tr key={user.id} className="group hover:bg-gray-50/30 transition-colors">
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs ${user.role === Role.ADMIN ? 'bg-black text-white' : 'bg-gray-100 text-gray-400'}`}>
+                              {user.email[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <span className="text-sm font-bold text-gray-900 block">{user.email}</span>
+                              <span className="text-[10px] text-gray-400 font-medium">{user.role}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-2">
+                            {getStatusIcon(user.status)}
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                              {user.status === 'aktiv' ? 'Identität bestätigt' : 'Wartet auf Check'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <button onClick={() => onRemoveUser(user.id)} className="p-2 text-gray-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Invite AI Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500">
+            
+            <div className="p-8 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-50 rounded-xl">
+                  <ShieldIcon className="w-5 h-5 text-blue-600" />
+                </div>
+                <span className="font-black text-sm uppercase tracking-widest">KI Einladungs-Assistent</span>
+              </div>
+              <button onClick={() => setShowInviteModal(false)} className="p-2 text-gray-300 hover:text-black transition-colors">
+                <CloseIcon className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-10">
+              {inviteStep === 'input' && (
+                <div className="space-y-8">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">E-Mail des neuen Bewohners</label>
+                    <input 
+                      type="email" 
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="name@provider.de"
+                      className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 text-lg"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button onClick={() => setInviteRole(Role.USER)} className={`p-6 rounded-3xl border transition-all text-left ${inviteRole === Role.USER ? 'border-black bg-black text-white shadow-xl' : 'border-gray-100 text-gray-400 hover:border-black/20'}`}>
+                      <span className="block font-black text-xs uppercase mb-1">Standard</span>
+                      <span className="text-xl font-bold">Bewohner</span>
+                    </button>
+                    <button onClick={() => setInviteRole(Role.ADMIN)} className={`p-6 rounded-3xl border transition-all text-left ${inviteRole === Role.ADMIN ? 'border-black bg-black text-white shadow-xl' : 'border-gray-100 text-gray-400 hover:border-black/20'}`}>
+                      <span className="block font-black text-xs uppercase mb-1">Verwaltung</span>
+                      <span className="text-xl font-bold">Haus-Admin</span>
+                    </button>
+                  </div>
+                  <button 
+                    onClick={handlePrepareInvitation}
+                    disabled={isProcessing || !inviteEmail.includes('@')}
+                    className="w-full bg-blue-600 text-white rounded-2xl py-5 font-bold hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-300 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isProcessing ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Einladung vorbereiten'}
+                  </button>
+                </div>
+              )}
+
+              {inviteStep === 'preview' && (
+                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                  <div className="bg-gray-50 rounded-[2rem] p-8 border border-gray-100">
+                    <div className="flex items-center gap-4 mb-6 border-b border-gray-200 pb-4">
+                      <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-bold shadow-sm">G</div>
+                      <div>
+                        <p className="text-xs font-bold">An: {inviteEmail}</p>
+                        <p className="text-[10px] text-gray-400">Betreff: Willkommen im WohnprojektGuide</p>
+                      </div>
+                    </div>
+                    <div className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap font-serif italic h-48 overflow-y-auto">
+                      {aiDraft}
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <button onClick={() => setInviteStep('input')} className="flex-1 py-4 font-bold text-gray-400 hover:text-black">Anpassen</button>
+                    <button 
+                      onClick={handleFinalizeInvite}
+                      className="flex-[2] bg-black text-white rounded-2xl py-4 font-bold flex items-center justify-center gap-2 hover:bg-gray-800"
+                    >
+                      Prüfen & Absenden
+                      <ArrowRightIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {inviteStep === 'verifying' && (
+                <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 animate-in fade-in duration-500">
+                  <div className="relative">
+                    <div className="w-24 h-24 border-4 border-blue-50 rounded-full flex items-center justify-center">
+                      <ShieldIcon className="w-10 h-10 text-blue-200 animate-pulse" />
+                    </div>
+                    <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black">Sicherheits-Check läuft</h3>
+                    <p className="text-sm text-gray-400">Google AI überprüft Identität und Richtlinien...</p>
+                  </div>
+                  {verificationResult && (
+                    <div className="bg-green-50 text-green-700 px-6 py-3 rounded-full text-xs font-bold flex items-center gap-2">
+                      <CheckCircleIcon className="w-4 h-4" />
+                      {verificationResult.reason}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminPanel;
