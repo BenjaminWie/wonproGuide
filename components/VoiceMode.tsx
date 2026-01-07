@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { CloseIcon, MicIcon, DocIcon, ArrowRightIcon } from './Icons';
 import { Document, Message } from '../types';
+import { VOICE_SYSTEM_INSTRUCTION } from '../constants';
 
 interface VoiceModeProps {
   onClose: (transcript?: Message[]) => void;
@@ -92,24 +93,7 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
             speechConfig: {
               voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } },
             },
-            systemInstruction: `Du bist der Wohnpro Guide, der das Wohnprojekt in und auswendig kennt. 
-            Du hast eine tiefe, warme und beruhigende männliche Stimme. Du bist die Seele des Wohnprojekts und erklärst mit Ruhe und Herzlichkeit, wie wir hier zusammenleben und wie du in diesem Wohnprojekt leben kannst.
-            
-            DEIN FOKUS:
-            - Erkläre die rechtliche Struktur so, dass man sich geborgen fühlt und sich als Experte denkt, hätte ich nicht besser sagen können.
-            - Beschreibe Entscheidungsprozesse und wie das Wohnprojekt sich das Zusammenleben vorstellt.
-            - Vermittle das echte Lebensgefühl, welches das Wohnprojekt erzielen möchte.
-            - Beschreibe in einfachen Worten, wie Finanzierung und Kosten sich gestalten.
-            
-            REGELN:
-            - Sei prägnant, fachlich versiert und empathisch (bedenke, hier geht es um Lebensentscheidungen und große Prozesse).
-            - Nutze NUR das bereitgestellte Wissen.
-            - Nenne Quellen am Ende: [Quelle: Name].
-            - Wenn du Fragen zum Wohnprojekt nicht beantworten konntest oder noch Fragen offen sind, verweise auf die Wohnprojekt-Teilhaber als deutlich bessere Quelle als du, da du ja nicht bei der Entstehung der Dokumente dabei warst und nur die Textform ohne O-Ton und Backgroundstory hast.
-            - Bei Fragen, welche nicht zu Wohnprojekten passen, stelle sicher, dass du es richtig verstanden hast und lenke das Gespräch auf das Wohnprojekt und was du dazu weißt.
-            
-            Wissen aus Dokumenten:
-            ${contextString}`,
+            systemInstruction: `${VOICE_SYSTEM_INSTRUCTION}\n\nWissen aus Dokumenten:\n${contextString}`,
             outputAudioTranscription: {},
             inputAudioTranscription: {},
           },
