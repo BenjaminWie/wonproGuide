@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
-import { CloseIcon, MicIcon, DocIcon, ArrowRightIcon, PlusIcon, CloseIcon as XIcon } from './Icons';
+import { CloseIcon, DocIcon, ArrowRightIcon, PlusIcon } from './Icons';
 import { Document, Message } from '../types';
 import { VOICE_SYSTEM_INSTRUCTION } from '../constants';
 
@@ -20,16 +20,17 @@ interface ActiveCitation {
 const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, documents }) => {
   const [status, setStatus] = useState<'connecting' | 'active' | 'error' | 'idle'>('connecting');
   
-  // Changed to an array to hold multiple citations found in one turn
   const [activeCitations, setActiveCitations] = useState<ActiveCitation[]>([]);
   const [showCitationList, setShowCitationList] = useState(false);
   
-  // Increased resolution for smoother waveform
-  const [audioLevels, setAudioLevels] = useState<number[]>(new Array(32).fill(2));
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const sessionTranscriptRef = useRef<Message[]>([]);
   const currentModelTurnText = useRef('');
   const currentUserTurnText = useRef('');
+
+  // Ref for smooth volume interpolation to make the wave organic
+  const currentVolumeRef = useRef(0);
 
   const sessionRef = useRef<any>(null);
   const audioContextRef = useRef<{
@@ -37,7 +38,6 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
     output: AudioContext;
     outputAnalyser: AnalyserNode;
     inputAnalyser: AnalyserNode;
-    ambientNode?: AudioNode;
   } | null>(null);
   
   const nextStartTimeRef = useRef(0);
@@ -71,43 +71,6 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
     return buffer;
   };
 
-  // Ambient Blues Atmosphere
-  const startBluesAtmosphere = (ctx: AudioContext, destination: AudioNode) => {
-    const masterGain = ctx.createGain();
-    masterGain.gain.value = 0.03; 
-    masterGain.connect(destination);
-
-    const freqs = [82.41, 164.81, 196.00, 246.94, 293.66]; 
-    
-    freqs.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      osc.type = i === 0 ? 'triangle' : 'sine';
-      osc.frequency.value = freq;
-      osc.detune.value = Math.random() * 8 - 4;
-
-      const oscGain = ctx.createGain();
-      oscGain.gain.value = 1.0 / freqs.length;
-
-      const lfo = ctx.createOscillator();
-      lfo.type = 'sine';
-      lfo.frequency.value = 0.1 + (Math.random() * 0.15);
-      
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.value = 0.3;
-      
-      lfo.connect(lfoGain);
-      lfoGain.connect(oscGain.gain);
-      
-      osc.connect(oscGain);
-      oscGain.connect(masterGain);
-      
-      osc.start();
-      lfo.start();
-    });
-    
-    return masterGain;
-  };
-
   useEffect(() => {
     let isMounted = true;
 
@@ -118,22 +81,19 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
         const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
         const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         
-        const ambientNode = startBluesAtmosphere(outputCtx, outputCtx.destination);
-        
         const inputAnalyser = inputCtx.createAnalyser();
         const outputAnalyser = outputCtx.createAnalyser();
-        // Higher FFT size for better resolution
-        inputAnalyser.fftSize = 256; 
+        inputAnalyser.fftSize = 256;
         outputAnalyser.fftSize = 256;
-        inputAnalyser.smoothingTimeConstant = 0.7;
-        outputAnalyser.smoothingTimeConstant = 0.7;
+        // High smoothing for very organic feel
+        inputAnalyser.smoothingTimeConstant = 0.8;
+        outputAnalyser.smoothingTimeConstant = 0.8;
         
         audioContextRef.current = { 
           input: inputCtx, 
           output: outputCtx, 
           inputAnalyser, 
-          outputAnalyser,
-          ambientNode
+          outputAnalyser
         };
 
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -182,7 +142,6 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
               if (!isMounted) return;
 
               if (message.serverContent?.inputTranscription) {
-                // User started speaking, clear previous model citations to clean up UI
                 if (currentUserTurnText.current === '') {
                    setActiveCitations([]); 
                    setShowCitationList(false);
@@ -194,24 +153,19 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
                 const text = message.serverContent.outputTranscription.text;
                 currentModelTurnText.current += text;
 
-                // Continuous citation scanning
                 const matches = [...currentModelTurnText.current.matchAll(/\[Quelle:\s*([^\]]+)\]/gi)];
                 
                 if (matches.length > 0) {
-                  // Check matches we haven't processed yet? 
-                  // Simplification: Re-evaluate matches and add if new
                   matches.forEach(match => {
                      const sourceName = match[1].trim().toLowerCase();
                      const doc = documents.find(d => d.name.toLowerCase().includes(sourceName));
                      
                      if (doc) {
-                        // Extract snippet context
                         const fullTextBefore = currentModelTurnText.current.substring(0, match.index);
                         const sentences = fullTextBefore.split(/[.!?]/);
                         const relevantSentence = sentences[sentences.length - 1]?.trim() || "Information gefunden";
 
                         setActiveCitations(prev => {
-                          // Prevent duplicates
                           if (prev.some(p => p.doc.id === doc.id)) return prev;
                           return [...prev, { doc, snippet: relevantSentence, timestamp: Date.now() }];
                         });
@@ -253,8 +207,6 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
                 sourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
                 sourcesRef.current.clear();
                 nextStartTimeRef.current = 0;
-                // Interrupt clears context but maybe we want to keep citations visible for a moment?
-                // For now, let's keep them until new user input starts
                 currentModelTurnText.current = '';
               }
             },
@@ -263,39 +215,108 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
           }
         });
 
-        const updateWaveform = () => {
-          if (!audioContextRef.current) return;
+        // ----------------------------------------------------
+        // Canvas Wave Visualization Logic
+        // ----------------------------------------------------
+        const renderFrame = () => {
+          if (!isMounted) return;
+          if (!audioContextRef.current || !canvasRef.current) {
+            rafIdRef.current = requestAnimationFrame(renderFrame);
+            return;
+          }
+
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+
           const { inputAnalyser, outputAnalyser } = audioContextRef.current;
           
+          // Handle Retina/HighDPI
+          const dpr = window.devicePixelRatio || 1;
+          const rect = canvas.getBoundingClientRect();
+          if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+          }
+          
+          const width = rect.width;
+          const height = rect.height;
+          const centerY = height / 2;
+
+          // Get Audio Data
           const inputData = new Uint8Array(inputAnalyser.frequencyBinCount);
           const outputData = new Uint8Array(outputAnalyser.frequencyBinCount);
           inputAnalyser.getByteFrequencyData(inputData);
           outputAnalyser.getByteFrequencyData(outputData);
+
+          const getAvg = (arr: Uint8Array) => arr.reduce((a, b) => a + b, 0) / arr.length;
           
-          const levels = [];
-          const numBars = 32; // Increased resolution
+          // Boost volume slightly for visual effect
+          const inVol = (getAvg(inputData) / 255) * 1.5;
+          const outVol = getAvg(outputData) / 255;
           
-          // Enhanced Visualization Logic
-          for (let i = 0; i < numBars; i++) {
-            // Logarithmic distribution approx
-            const idx = Math.floor(Math.pow(i / numBars, 1.5) * (inputData.length / 2));
-            
-            const inVal = inputData[idx] || 0;
-            const outVal = outputData[idx] || 0;
-            
-            // Output takes precedence for visual feedback when AI speaks
-            let val = Math.max(inVal * 0.8, outVal); 
-            
-            // Dampen noise floor
-            if (val < 10) val = 2; 
-            
-            // Normalize 0-100
-            levels.push((val / 255) * 100);
-          }
-          setAudioLevels(levels);
-          rafIdRef.current = requestAnimationFrame(updateWaveform);
+          // Take the louder source
+          const targetVol = Math.max(inVol, outVol);
+
+          // LERP for smooth volume transition (prevents jumpiness)
+          currentVolumeRef.current += (targetVol - currentVolumeRef.current) * 0.1;
+          const vol = currentVolumeRef.current;
+
+          // Clear
+          ctx.clearRect(0, 0, width, height);
+
+          // Wave Parameters
+          const time = Date.now() / 1000;
+          
+          // Defined lines for the style
+          const lines = [
+             // Faint Green ambient line
+             { color: 'rgba(34, 197, 94, 0.2)', speed: 0.5, phase: 0, frequency: 0.5, amplitude: 0.5 },
+             // Slightly stronger Green line
+             { color: 'rgba(34, 197, 94, 0.4)', speed: 0.8, phase: 2, frequency: 0.8, amplitude: 0.7 }, 
+             // Faint black/grey shadow
+             { color: 'rgba(0, 0, 0, 0.05)', speed: 1.1, phase: 1, frequency: 1.2, amplitude: 0.6 },
+             // Main Black line
+             { color: 'rgba(0, 0, 0, 0.8)', speed: 1.2, phase: 4, frequency: 1.0, amplitude: 1.0 } 
+          ];
+
+          lines.forEach((line) => {
+             ctx.beginPath();
+             ctx.strokeStyle = line.color;
+             ctx.lineWidth = line.color.includes('0.8') ? 2 : 1.5;
+             ctx.lineCap = 'round';
+             ctx.lineJoin = 'round';
+             
+             // Draw the sine wave
+             // Step by 2px for decent performance vs quality
+             for (let x = 0; x <= width; x += 2) {
+                 // Normalized x coordinate (-1 to 1)
+                 const nx = (x / width) * 2 - 1;
+                 
+                 // Attenuation function: Parabola that is 1 at center and 0 at edges
+                 // Math.pow(..., 2.5) makes the taper smoother/sharper near edges
+                 const attenuation = Math.pow(1 - Math.pow(nx, 2), 2.5);
+                 
+                 // Calculate Sine
+                 const sine = Math.sin(x * 0.005 * line.frequency + time * line.speed + line.phase);
+                 
+                 // Final Amplitude:
+                 // Base "breathing" amplitude (20) + Volume reactive part (100)
+                 // Multiplied by the line's specific factor and the edge attenuation
+                 const currentAmp = (20 + vol * 100) * line.amplitude * attenuation;
+                 
+                 const y = centerY + sine * currentAmp;
+                 
+                 if (x === 0) ctx.moveTo(x, y);
+                 else ctx.lineTo(x, y);
+             }
+             ctx.stroke();
+          });
+
+          rafIdRef.current = requestAnimationFrame(renderFrame);
         };
-        updateWaveform();
+        renderFrame();
 
         sessionRef.current = await sessionPromise;
       } catch (err) {
@@ -321,21 +342,9 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
     onClose(sessionTranscriptRef.current);
   };
 
-  const avgLevel = audioLevels.reduce((a, b) => a + b, 0) / audioLevels.length;
-  const isSpeaking = avgLevel > 10;
-
   return (
     <div className="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-start py-12 px-8 animate-in fade-in duration-700 overflow-hidden">
       
-      {/* Dynamic Background Atmosphere */}
-      <div 
-        className="fixed inset-0 pointer-events-none transition-all duration-1000 opacity-40"
-        style={{
-          background: `radial-gradient(circle at 50% 50%, ${activeCitations.length > 0 ? '#22c55e' : '#000000'} 0%, transparent 70%)`,
-          transform: `scale(${1 + (avgLevel / 100) * 0.8})`
-        }}
-      />
-
       {/* Close Button */}
       <button 
         onClick={() => onClose(sessionTranscriptRef.current)}
@@ -345,7 +354,7 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
       </button>
 
       {/* Header / Citation Area */}
-      <div className="w-full flex flex-col items-center relative z-20 mb-8 min-h-[200px]">
+      <div className="w-full flex flex-col items-center relative z-20 mb-4 min-h-[160px]">
         <div className={`mb-6 px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all duration-700 shadow-sm ${activeCitations.length > 0 ? 'bg-green-600 text-white animate-pulse' : 'bg-gray-50 text-gray-300'}`}>
           {activeCitations.length > 0 ? `${activeCitations.length} Quellen gefunden` : 'Guide hört zu...'}
         </div>
@@ -416,61 +425,12 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
               )}
             </div>
           )}
-
-          {activeCitations.length === 0 && (
-             <div className="text-center opacity-40 transition-opacity duration-1000 mt-8">
-               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Atmo läuft...</p>
-             </div>
-          )}
         </div>
       </div>
 
-      {/* Main Visualizer Area */}
-      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg space-y-16 z-10">
-        <div className="relative">
-          {/* Dynamic Reactive Rings */}
-          <div 
-            className="absolute inset-0 rounded-full border-2 border-black/5 transition-transform duration-[50ms]"
-            style={{ transform: `scale(${2.5 + (avgLevel / 100) * 2.5})`, opacity: Math.min(avgLevel / 80, 0.5) }}
-          />
-           <div 
-            className="absolute inset-0 rounded-full border border-black/10 transition-transform duration-[100ms]"
-            style={{ transform: `scale(${1.8 + (avgLevel / 100) * 1.5})`, opacity: Math.min(avgLevel / 100, 0.3) }}
-          />
-          
-          <div className={`relative w-64 h-64 rounded-full bg-white shadow-[0_64px_128px_-32px_rgba(0,0,0,0.15)] flex items-center justify-center transition-all duration-700 border border-gray-100 ${status === 'active' ? 'scale-110' : 'scale-100'}`}>
-            <div 
-              className={`w-52 h-52 rounded-full flex items-center justify-center transition-all duration-[50ms] ${status === 'active' ? 'bg-black' : 'bg-gray-50'}`}
-              style={{ 
-                transform: `scale(${1 + (avgLevel / 100) * 0.3})`,
-                boxShadow: status === 'active' ? `0 0 ${avgLevel * 2}px rgba(0,0,0,${0.2 + (avgLevel/200)})` : 'none'
-              }}
-            >
-              <MicIcon className={`w-28 h-28 transition-all duration-500 ${status === 'active' ? 'text-white' : 'text-gray-200'}`} />
-            </div>
-          </div>
-        </div>
-
-        {/* Enhanced Bar Visualizer */}
-        <div className="h-32 flex items-center justify-center gap-1.5 px-8 w-full max-w-lg">
-          {audioLevels.map((level, i) => {
-            // Calculate symmetry for a centered look
-            const centerIdx = audioLevels.length / 2;
-            const dist = Math.abs(i - centerIdx);
-            const heightMod = 1 - (dist / centerIdx) * 0.5; // Taper towards edges
-            
-            return (
-              <div 
-                key={i}
-                className={`w-1.5 rounded-full transition-all duration-[30ms] ${status === 'active' ? (activeCitations.length > 0 ? 'bg-green-500' : 'bg-black') : 'bg-gray-100'}`}
-                style={{ 
-                  height: `${Math.max(5, level * heightMod)}%`,
-                  opacity: 0.2 + (level / 120) * 0.8,
-                }}
-              />
-            );
-          })}
-        </div>
+      {/* Main Wave Visualizer Area */}
+      <div className="flex-1 w-full flex flex-col items-center justify-center relative z-10">
+         <canvas ref={canvasRef} className="w-full h-64 sm:h-96 pointer-events-none" />
       </div>
 
       {/* Footer Branding */}
