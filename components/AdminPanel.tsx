@@ -7,7 +7,8 @@ import * as mammoth from 'mammoth';
 import * as pdfjs from 'pdfjs-dist';
 
 // Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs`;
+// Using unpkg provides a direct link to the worker script, avoiding dynamic import issues with esm.sh in this context
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
 
 interface AdminPanelProps {
   documents: AppDocument[];
@@ -173,7 +174,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 onClick={() => setActiveTab(tab as any)}
                 className={`pb-4 text-sm font-black uppercase tracking-[0.2em] relative transition-colors ${activeTab === tab ? 'text-black' : 'text-gray-300 hover:text-black'}`}
               >
-                {tab === 'docs' ? 'Hauswissen' : 'Mitglieder'}
+                {tab === 'docs' ? 'Dokumente' : 'Mitglieder'}
                 {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
               </button>
             ))}
