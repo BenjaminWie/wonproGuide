@@ -67,6 +67,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     return fullText;
   };
 
+  const determineCategory = (name: string): AppDocument['category'] => {
+    const n = name.toLowerCase();
+    if (n.includes('satzung') || n.includes('vertrag') || n.includes('recht') || n.includes('gbh') || n.includes('genossenschaft')) return 'Recht & Struktur';
+    if (n.includes('vision') || n.includes('selbst') || n.includes('werte') || n.includes('konzept') || n.includes('leitbild')) return 'Selbstverständnis & Vision';
+    if (n.includes('aufnahme') || n.includes('mitglied') || n.includes('mitwirkung') || n.includes('teilnahme') || n.includes('ag')) return 'Teilnahme & Mitwirkung';
+    if (n.includes('protokoll') || n.includes('beschluss') || n.includes('entscheidung') || n.includes('plenum') || n.includes('versammlung')) return 'Entscheidungen & Prozesse';
+    return 'Regeln & Hausordnung';
+  };
+
   const handleFiles = async (files: FileList) => {
     setIsDragging(false);
     for (let i = 0; i < files.length; i++) {
@@ -85,7 +94,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         const newDoc: AppDocument = {
           id: Math.random().toString(36).substr(2, 9),
           name: file.name,
-          category: file.name.toLowerCase().includes('vertrag') ? 'Verträge' : 'Hausordnung',
+          category: determineCategory(file.name),
           uploadDate: new Date().toLocaleDateString('de-DE'),
           content: text,
           status: 'aktiv'
@@ -164,7 +173,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 onClick={() => setActiveTab(tab as any)}
                 className={`pb-4 text-sm font-black uppercase tracking-[0.2em] relative transition-colors ${activeTab === tab ? 'text-black' : 'text-gray-300 hover:text-black'}`}
               >
-                {tab === 'docs' ? 'Wissensbasis' : 'Mitglieder'}
+                {tab === 'docs' ? 'Hauswissen' : 'Mitglieder'}
                 {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
               </button>
             ))}
@@ -180,7 +189,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="space-y-8">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-400">Ziehe Dokumente (.pdf, .docx) hierher, um das Hauswissen zu füttern.</p>
+                  <p className="text-sm text-gray-400">Lade Satzungen, Visionen oder Beschlussprotokolle hoch.</p>
                 </div>
               </div>
 
@@ -212,10 +221,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   )}
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  {uploadProgress || 'Dateien hier ablegen'}
+                  {uploadProgress || 'Wohnpro Wissen hinzufügen'}
                 </h3>
                 <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
-                  Lade Hausordnungen, Verträge oder Beschlüsse als PDF oder Word hoch. Die KI liest sie automatisch ein.
+                  Dateien (.pdf, .docx) hier ablegen. Die KI ordnet sie automatisch Themen wie Recht, Vision oder Mitwirkung zu.
                 </p>
               </div>
 
@@ -223,7 +232,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="pt-10 space-y-4">
                   <div className="flex items-center gap-2 mb-6">
                     <div className="w-1.5 h-1.5 bg-black rounded-full" />
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Aktives Wissen ({documents.length})</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Aktive Dokumente ({documents.length})</h4>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {documents.map(doc => (
@@ -255,7 +264,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="space-y-8">
               <div className="flex items-center justify-between mb-2">
                 <div>
-                  <p className="text-sm text-gray-400">Einladungen werden von der KI verifiziert.</p>
+                  <p className="text-sm text-gray-400">Einladungen werden vom Wohnpro Guide verifiziert.</p>
                 </div>
                 <button 
                   onClick={() => setShowInviteModal(true)}
@@ -293,7 +302,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                           <div className="flex items-center gap-2">
                             {getStatusIcon(user.status)}
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                              {user.status === 'aktiv' ? 'Identität bestätigt' : 'Wartet auf Check'}
+                              {user.status === 'aktiv' ? 'Wohnpro Identität bestätigt' : 'Wartet auf Check'}
                             </span>
                           </div>
                         </td>
@@ -322,7 +331,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="p-2 bg-blue-50 rounded-xl">
                   <ShieldIcon className="w-5 h-5 text-blue-600" />
                 </div>
-                <span className="font-black text-sm uppercase tracking-widest">KI Einladungs-Assistent</span>
+                <span className="font-black text-sm uppercase tracking-widest">Wohnpro Guide Einladungs-Assistent</span>
               </div>
               <button onClick={() => setShowInviteModal(false)} className="p-2 text-gray-300 hover:text-black transition-colors">
                 <CloseIcon className="w-6 h-6" />
@@ -349,7 +358,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     </button>
                     <button onClick={() => setInviteRole(Role.ADMIN)} className={`p-6 rounded-3xl border transition-all text-left ${inviteRole === Role.ADMIN ? 'border-black bg-black text-white shadow-xl' : 'border-gray-100 text-gray-400 hover:border-black/20'}`}>
                       <span className="block font-black text-xs uppercase mb-1">Verwaltung</span>
-                      <span className="text-xl font-bold">Haus-Admin</span>
+                      <span className="text-xl font-bold">Wohnpro Admin</span>
                     </button>
                   </div>
                   <button 
@@ -369,7 +378,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-bold shadow-sm">G</div>
                       <div>
                         <p className="text-xs font-bold">An: {inviteEmail}</p>
-                        <p className="text-[10px] text-gray-400">Betreff: Willkommen im WohnprojektGuide</p>
+                        <p className="text-[10px] text-gray-400">Betreff: Willkommen im Wohnpro Guide</p>
                       </div>
                     </div>
                     <div className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap font-serif italic h-48 overflow-y-auto">
@@ -398,8 +407,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black">Sicherheits-Check läuft</h3>
-                    <p className="text-sm text-gray-400">Google AI überprüft Identität und Richtlinien...</p>
+                    <h3 className="text-xl font-black">Wohnpro Guide Check läuft</h3>
+                    <p className="text-sm text-gray-400">Google AI überprüft Identität und Wohnpro-Richtlinien...</p>
                   </div>
                   {verificationResult && (
                     <div className="bg-green-50 text-green-700 px-6 py-3 rounded-full text-xs font-bold flex items-center gap-2">

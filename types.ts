@@ -18,7 +18,7 @@ export interface User {
 export interface Document {
   id: string;
   name: string;
-  category: 'Verträge' | 'Hausordnung' | 'Protokolle' | 'Leitlinien' | 'How-tos';
+  category: 'Recht & Struktur' | 'Selbstverständnis & Vision' | 'Teilnahme & Mitwirkung' | 'Entscheidungen & Prozesse' | 'Regeln & Hausordnung';
   uploadDate: string;
   content: string;
   status: 'aktiv' | 'archiviert';

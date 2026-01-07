@@ -14,7 +14,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setError('Bitte gib deine E-Mail Adresse ein.');
+      setError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
       return;
     }
     onLogin(email);
@@ -30,8 +30,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           </div>
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">WohnprojektGuide</h1>
-          <p className="mt-3 text-gray-500">Willkommen zu Hause.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Wohnpro Guide</h1>
+          <p className="mt-3 text-gray-500">Willkommen in eurem Wohnpro.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -40,7 +40,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
-              placeholder="E-Mail Adresse"
+              placeholder="Wohnpro E-Mail Adresse"
               className={`w-full bg-gray-50 border ${error ? 'border-red-200' : 'border-gray-100'} rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all text-lg placeholder:text-gray-300`}
             />
             {error && <p className="mt-2 text-sm text-red-500 text-left px-2">{error}</p>}
@@ -50,13 +50,13 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
             type="submit"
             className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
           >
-            Anmelden
+            Guide öffnen
           </button>
         </form>
 
         <div className="mt-12 pt-8 border-t border-gray-50">
           <p className="text-sm text-gray-400">
-            Noch keinen Zugang? Frag deine Hausverwaltung nach einer Einladung.
+            Noch keinen Zugang zum Wohnpro Guide? Frag deine Wohnpro-Verwaltung nach einer Einladung.
           </p>
         </div>
       </div>

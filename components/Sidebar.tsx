@@ -26,7 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sessions, currentVie
       <div className={`fixed inset-y-0 left-0 w-80 bg-white border-r border-gray-100 z-50 transform transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
         <div className="flex flex-col h-full p-6">
           <div className="flex items-center justify-between mb-8 lg:hidden">
-            <span className="font-semibold text-xl tracking-tight">WohnprojektGuide</span>
+            <span className="font-semibold text-xl tracking-tight">Wohnpro Guide</span>
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
               <CloseIcon className="w-5 h-5" />
             </button>
@@ -38,14 +38,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sessions, currentVie
               className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all ${currentView === 'chat' ? 'bg-gray-50 text-black font-medium' : 'text-gray-500 hover:bg-gray-50 hover:text-black'}`}
             >
               <ChatIcon className="w-5 h-5" />
-              <span>Neuer Chat</span>
+              <span>Neuer Wohnpro Chat</span>
             </button>
             <button 
               onClick={() => { setView('docs-view'); onClose(); }}
               className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all ${currentView === 'docs-view' ? 'bg-gray-50 text-black font-medium' : 'text-gray-500 hover:bg-gray-50 hover:text-black'}`}
             >
               <DocIcon className="w-5 h-5" />
-              <span>Dokumente</span>
+              <span>Wohnpro Dokumente</span>
             </button>
           </div>
 
@@ -80,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sessions, currentVie
             </button>
             <button className="flex items-center gap-3 w-full p-3 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-black transition-all">
               <InfoIcon className="w-5 h-5" />
-              <span>Über Guide</span>
+              <span>Über Wohnpro Guide</span>
             </button>
           </div>
         </div>

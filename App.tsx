@@ -18,7 +18,6 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // App State - Load from localStorage if available
   const [documents, setDocuments] = useState<Document[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? JSON.parse(saved) : INITIAL_DOCUMENTS;
@@ -29,22 +28,19 @@ const App: React.FC = () => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Nav State for Doc Detail
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [highlightText, setHighlightText] = useState<string>('');
 
-  // Persist documents whenever they change
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
   }, [documents]);
 
-  // Authentication
   const handleLogin = (email: string) => {
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
     if (user) {
       setCurrentUser(user);
     } else {
-      alert("Zugang verweigert. Nur verifizierte Bewohner können sich anmelden.");
+      alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
     }
   };
 
@@ -150,7 +146,7 @@ const App: React.FC = () => {
               <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="font-semibold text-gray-900">WohnprojektGuide</span>
+          <span className="font-semibold text-gray-900">Wohnpro Guide</span>
           <div className="w-10" />
         </header>
 
@@ -185,7 +181,7 @@ const App: React.FC = () => {
               const target = users.find(u => u.id === id);
               const admins = users.filter(u => u.role === Role.ADMIN);
               if (target?.role === Role.ADMIN && admins.length <= 1) {
-                alert("Sicherheitsabbruch: Das Haus benötigt mindestens einen Administrator.");
+                alert("Sicherheitsabbruch: Das Wohnpro benötigt mindestens einen Administrator.");
                 return;
               }
               setUsers(users.filter(u => u.id !== id));
@@ -195,11 +191,11 @@ const App: React.FC = () => {
 
         {currentView === 'docs-view' && (
           <div className="max-w-4xl mx-auto py-10 px-6 w-full overflow-y-auto">
-            <h1 className="text-4xl font-black mb-8">Hauswissen</h1>
+            <h1 className="text-4xl font-black mb-8">Wohnpro Wissen</h1>
             {documents.length === 0 ? (
               <div className="py-20 text-center bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
                 <DocIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-400 font-medium">Noch kein Wissen vorhanden. Admins müssen Dokumente hochladen.</p>
+                <p className="text-gray-400 font-medium">Der Wohnpro Guide hat noch kein Wissen. Admins müssen Dokumente hochladen.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

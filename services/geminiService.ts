@@ -4,7 +4,6 @@ import { SYSTEM_INSTRUCTION } from "../constants";
 import { Document, Citation, Role } from "../types";
 
 export class GeminiService {
-  // Fix: Ensure standard initialization with direct process.env usage
   private getAI() {
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
@@ -70,10 +69,10 @@ export class GeminiService {
       Beziehe dich kurz auf die Hausordnung oder das Gemeinschaftsgefühl des Wohnprojekts.
       Kontext: ${houseContext}`,
       config: {
-        systemInstruction: "Du bist ein professioneller Verwalter eines modernen Wohnprojekts. Schreibstil: Herzlich, klar, einladend. Formatiere als Plain Text E-Mail.",
+        systemInstruction: "Du bist ein professioneller Verwalter eines modernen Wohnpro. Schreibstil: Herzlich, klar, einladend. Formatiere als Plain Text E-Mail. Bezeichne das Tool als Wohnpro Guide.",
       }
     });
-    return response.text || "Willkommen im Wohnprojekt!";
+    return response.text || "Willkommen im Wohnpro! Dein Wohnpro Guide ist für dich da.";
   }
 
   async verifyUser(email: string): Promise<{ success: boolean; reason: string }> {
@@ -93,7 +92,7 @@ export class GeminiService {
         }
       }
     });
-    return JSON.parse(response.text || '{"success":true, "reason": "Verifiziert"}');
+    return JSON.parse(response.text || '{"success":true, "reason": "Verifiziert durch Wohnpro Guide"}');
   }
 }
 
