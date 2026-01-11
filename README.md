@@ -19,15 +19,26 @@ Der zentrale Wissens- und Orientierungsort für gemeinschaftliches Wohnen. Ein K
 
 ### Configuration
 
+You can configure the application to use either **Google AI Studio** (Recommended for quick start) or **Google Cloud Vertex AI** (Recommended for enterprise).
+
+#### Option A: Google AI Studio (API Key)
 1.  Create a `.env` file in the root directory.
-2.  Add your Google Gemini API Key (see `.env.example`).
+2.  Add your API Key.
+    ```bash
+    # .env
+    API_KEY=AIzaSyYourKeyHere...
+    ```
+3.  To obtain an API key, visit [Google AI Studio](https://aistudio.google.com/).
 
-```bash
-# .env
-API_KEY=AIzaSyYourKeyHere...
-```
-
-To obtain an API key, visit [Google AI Studio](https://aistudio.google.com/).
+#### Option B: Google Cloud Vertex AI
+1.  Ensure you have a Google Cloud Project with the Vertex AI API enabled.
+2.  Configure your `.env` file with the following variables in addition to the API Key:
+    ```bash
+    # .env
+    GCP_PROJECT=your-gcp-project-id
+    GCP_LOCATION=us-central1
+    ```
+    *Note: If running in a browser environment without a proxy, you may still need to handle authentication (e.g., OAuth tokens) depending on your network setup.*
 
 ### Running the App
 
@@ -37,89 +48,34 @@ npm start
 npm run dev
 ```
 
-The application will launch at `http://localhost:3000` (or the port specified by your bundler).
+The application will launch at `http://localhost:3000`.
+
+---
+
+## 🤖 Models & Capabilities
+
+This project uses the `@google/genai` SDK to access specific Gemini models.
+
+### 1. Text & RAG
+*   **Model**: `gemini-3-flash-preview`
+*   **Purpose**: Used for the main chat interface, generating FAQs from documents, and verifying user invitations.
+
+### 2. Speech-to-Text (STT) & Text-to-Speech (TTS)
+*   **Model**: `gemini-2.5-flash-native-audio-preview-12-2025`
+*   **Purpose**: The "Voice Mode" uses the **Multimodal Live API**.
+*   **How it works**: We do **not** use separate STT (Transcription) or TTS (Synthesis) models. Instead, we open a bidirectional WebSocket connection to the model. We stream raw audio bytes in, and the model streams raw audio bytes out. This provides much lower latency than traditional STT -> LLM -> TTS pipelines.
 
 ---
 
 ## 💾 Database Structure
 
-Currently, this application uses the browser's `localStorage` for persistence. For a production deployment, you should implement a backend database (e.g., PostgreSQL or MongoDB) with the following schema structure.
+Currently, this application uses the browser's `localStorage` for persistence. For a production deployment, use a backend database (e.g., PostgreSQL).
 
-### 1. Users (`users`)
-Stores authentication and authorization details for residents and admins.
+| Table | Description |
+| :--- | :--- |
+| `users` | Stores authentication and authorization details (`role`: USER/ADMIN). |
+| `documents` | Stores extracted text content for RAG. **Critical**: The `content` column holds the full text used for AI context. |
+| `personas` | Defines target audiences for dynamic FAQ generation. Contains the "Meta-Prompt". |
+| `faqs` | Stores pre-generated questions and answers linked to `documents` and `personas`. |
+| `chat_sessions` | Stores conversation history. |
 
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | UUID / String | Primary Key. |
-| `email` | String | Unique email address. |
-| `role` | Enum | `'USER'` (Resident) or `'ADMIN'` (Admin). |
-| `status` | Enum | `'aktiv'`, `'eingeladen'`, `'deaktiviert'`. |
-| `invited_at` | Timestamp | Date of invitation. |
-| `invite_content` | Text | (Optional) AI-generated personalized invite message. |
-
-### 2. Documents (`documents`)
-Stores the knowledge base (PDFs/DOCX converted to text) used for RAG (Retrieval-Augmented Generation).
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | UUID / String | Primary Key. |
-| `name` | String | Original filename. |
-| `category` | Enum | e.g., 'Recht & Struktur', 'Hausordnung'. |
-| `content` | Text / Blob | **Critical**: The full extracted text content for AI analysis. |
-| `upload_date` | Date | |
-| `status` | Enum | `'aktiv'` or `'archiviert'`. |
-
-### 3. Personas (`personas`)
-Defines the "lenses" or target audiences for dynamic FAQ generation.
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | UUID / String | Primary Key. |
-| `name` | String | Display name (e.g., "The Newcomer"). |
-| `description` | Text | **Meta-Dynamic Prompt**: Instructions for the AI on how to think/ask questions like this persona. |
-| `role` | Enum | `'beginner'` or `'expert'` (Controls UI styling). |
-
-### 4. FAQs (`faqs`)
-Stores AI-generated questions and answers derived from documents, specific to a persona.
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | UUID / String | Primary Key. |
-| `question` | String | The generated question. |
-| `answer` | Text | The generated answer. |
-| `category` | String | Matches document category. |
-| `source_doc_id` | UUID | Foreign Key -> `documents.id`. |
-| `persona_id` | UUID | Foreign Key -> `personas.id`. |
-
-### 5. Chat Sessions (`chat_sessions`)
-(Optional) Stores chat history for users.
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `id` | UUID | Primary Key. |
-| `user_id` | UUID | Foreign Key -> `users.id`. |
-| `messages` | JSONB | Array of `{ role: 'user'|'model', text: '...', citations: [...] }`. |
-
----
-
-## 🔑 Vertex AI / Gemini API Configuration
-
-This project uses the `@google/genai` SDK.
-
-**Requirements:**
-1.  **Google Cloud Project** or **Google AI Studio** account.
-2.  **API Key**: Must have permissions for `gemini-2.5-flash` and `gemini-3-flash-preview` models.
-
-**Example `.env`:**
-
-```env
-# The API key must start with AIza...
-# Ensure this key is not committed to public repositories.
-API_KEY=AIzaSyD-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-**Code Usage:**
-The app initializes the client strictly using the environment variable:
-```typescript
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-```

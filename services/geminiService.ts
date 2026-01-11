@@ -5,6 +5,16 @@ import { Document, Citation, Role, FAQItem, Persona } from "../types";
 
 export class GeminiService {
   private getAI() {
+    // Check if Vertex AI specific variables are set
+    if (process.env.GCP_PROJECT && process.env.GCP_LOCATION) {
+      return new GoogleGenAI({
+        vertexai: true,
+        project: process.env.GCP_PROJECT,
+        location: process.env.GCP_LOCATION,
+      });
+    }
+    
+    // Fallback to Google AI Studio (API Key)
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
