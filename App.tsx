@@ -1,19 +1,24 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, ChatSession, Document, User, Message, Role, UserStatus } from './types';
-import { INITIAL_DOCUMENTS, INITIAL_USERS } from './constants';
+import { View, ChatSession, Document, User, Message, Role, UserStatus, FAQItem, Persona } from './types';
+import { INITIAL_DOCUMENTS, INITIAL_USERS, INITIAL_PERSONAS } from './constants';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
 import VoiceMode from './components/VoiceMode';
 import AdminPanel from './components/AdminPanel';
 import DocumentDetail from './components/DocumentDetail';
+import LandingPage from './components/LandingPage';
+import FAQView from './components/FAQView';
 import { gemini } from './services/geminiService';
 import { DocIcon } from './components/Icons';
 
 const STORAGE_KEY = 'wohnprojekt_docs_cache';
+const FAQ_STORAGE_KEY = 'wohnprojekt_faq_cache';
+const PERSONA_STORAGE_KEY = 'wohnprojekt_persona_cache';
 
 const App: React.FC = () => {
+  const [showLanding, setShowLanding] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -22,11 +27,23 @@ const App: React.FC = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? JSON.parse(saved) : INITIAL_DOCUMENTS;
   });
+
+  const [faqs, setFaqs] = useState<FAQItem[]>(() => {
+    const saved = localStorage.getItem(FAQ_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [personas, setPersonas] = useState<Persona[]>(() => {
+    const saved = localStorage.getItem(PERSONA_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : INITIAL_PERSONAS;
+  });
   
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFaqGenerating, setIsFaqGenerating] = useState(false);
+  const [generatingStatus, setGeneratingStatus] = useState('');
 
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [highlightText, setHighlightText] = useState<string>('');
@@ -34,6 +51,14 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
   }, [documents]);
+
+  useEffect(() => {
+    localStorage.setItem(FAQ_STORAGE_KEY, JSON.stringify(faqs));
+  }, [faqs]);
+
+  useEffect(() => {
+    localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(personas));
+  }, [personas]);
 
   const handleLogin = (email: string) => {
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
@@ -93,6 +118,36 @@ const App: React.FC = () => {
     setIsLoading(false);
   };
 
+  const handleAddDoc = async (doc: Document) => {
+    setDocuments(prev => [...prev, doc]);
+    setIsFaqGenerating(true);
+    
+    try {
+      // Loop through all personas and generate specific FAQs for each
+      for (const persona of personas) {
+        setGeneratingStatus(`Lerne für ${persona.name}...`);
+        const extractedFaqs = await gemini.generateFAQs(doc, persona);
+        
+        const newFaqItems: FAQItem[] = extractedFaqs.map(f => ({
+          id: Math.random().toString(36).substr(2, 9),
+          question: f.question || '',
+          answer: f.answer || '',
+          category: f.category || doc.category,
+          sourceDocId: doc.id,
+          sourceDocName: doc.name,
+          personaId: persona.id
+        }));
+        
+        setFaqs(prev => [...prev, ...newFaqItems]);
+      }
+    } catch (e) {
+      console.error("Failed to generate FAQs background", e);
+    } finally {
+      setIsFaqGenerating(false);
+      setGeneratingStatus('');
+    }
+  };
+
   const handleInviteUser = (email: string, role: Role, content: string) => {
     const newUser: User = {
       id: Math.random().toString(36).substr(2, 9),
@@ -118,6 +173,10 @@ const App: React.FC = () => {
     }
   };
 
+  if (showLanding && !currentUser) {
+    return <LandingPage onStart={() => setShowLanding(false)} />;
+  }
+
   if (!currentUser) {
     return <LoginView onLogin={handleLogin} />;
   }
@@ -140,15 +199,31 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 h-full relative overflow-hidden flex flex-col pt-4 lg:pt-0">
-        <header className="flex items-center justify-between px-6 py-4 lg:hidden border-b border-gray-100">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-gray-50 rounded-full">
+        <header className="flex items-center justify-between px-6 py-4 lg:hidden border-b border-gray-100 bg-white z-10">
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="font-semibold text-gray-900">Wohnpro Guide</span>
+          <span className="font-bold text-gray-900 tracking-tight">Wohnpro Guide</span>
           <div className="w-10" />
         </header>
+
+        {isFaqGenerating && (
+          <div className="absolute top-4 right-4 z-50 animate-in slide-in-from-right-10 fade-in duration-700">
+            <div className="bg-black text-white px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl ring-4 ring-black/5">
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce [animation-duration:0.8s]" />
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.2s]" />
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.4s]" />
+              </div>
+              <div className="flex flex-col">
+                 <span className="text-[10px] font-black uppercase tracking-[0.2em]">KI lernt Hausregeln...</span>
+                 <span className="text-[9px] text-gray-400">{generatingStatus}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {currentView === 'chat' && (
           <ChatView 
@@ -168,14 +243,26 @@ const App: React.FC = () => {
           />
         )}
 
-        {(currentView === 'admin-docs' || currentView === 'admin-users') && (
+        {currentView === 'faq' && (
+          <FAQView 
+            faqs={faqs}
+            personas={personas}
+            onViewSource={handleViewDocument}
+          />
+        )}
+
+        {currentView.startsWith('admin') && (
           <AdminPanel 
             documents={documents}
             users={users}
+            personas={personas}
             activeTab={currentView.split('-')[1] as any}
             setActiveTab={(tab) => setCurrentView(`admin-${tab}` as View)}
-            onAddDoc={(doc) => setDocuments(prev => [...prev, doc])}
-            onRemoveDoc={(id) => setDocuments(prev => prev.filter(d => d.id !== id))}
+            onAddDoc={handleAddDoc}
+            onRemoveDoc={(id) => {
+              setDocuments(prev => prev.filter(d => d.id !== id));
+              setFaqs(prev => prev.filter(f => f.sourceDocId !== id));
+            }}
             onInviteUser={handleInviteUser}
             onRemoveUser={(id) => {
               const target = users.find(u => u.id === id);
@@ -186,11 +273,20 @@ const App: React.FC = () => {
               }
               setUsers(users.filter(u => u.id !== id));
             }}
+            onAddPersona={(p) => setPersonas(prev => [...prev, p])}
+            onUpdatePersona={(p) => setPersonas(prev => prev.map(existing => existing.id === p.id ? p : existing))}
+            onRemovePersona={(id) => {
+              if (personas.length <= 1) {
+                alert("Mindestens eine Persona muss existieren.");
+                return;
+              }
+              setPersonas(prev => prev.filter(p => p.id !== id));
+            }}
           />
         )}
 
         {currentView === 'docs-view' && (
-          <div className="max-w-4xl mx-auto py-10 px-6 w-full overflow-y-auto">
+          <div className="max-w-4xl mx-auto py-10 px-6 w-full overflow-y-auto no-scrollbar">
             <h1 className="text-4xl font-black mb-8">Wohnpro Wissen</h1>
             {documents.length === 0 ? (
               <div className="py-20 text-center bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">

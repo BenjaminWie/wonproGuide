@@ -25,6 +25,23 @@ export interface Document {
   fileUrl?: string;
 }
 
+export interface Persona {
+  id: string;
+  name: string;
+  description: string; // The "Meta-Dynamic" prompt for the AI
+  role: 'beginner' | 'expert'; // For UI styling/icon hints
+}
+
+export interface FAQItem {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  sourceDocId: string;
+  sourceDocName: string;
+  personaId: string;
+}
+
 export interface Citation {
   source: string;
   text: string;
@@ -45,4 +62,4 @@ export interface ChatSession {
   createdAt: string;
 }
 
-export type View = 'chat' | 'voice' | 'admin-docs' | 'admin-users' | 'docs-view' | 'doc-detail';
+export type View = 'chat' | 'voice' | 'admin-docs' | 'admin-users' | 'admin-personas' | 'docs-view' | 'doc-detail' | 'faq';

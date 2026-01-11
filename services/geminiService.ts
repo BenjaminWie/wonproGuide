@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
-import { Document, Citation, Role } from "../types";
+import { Document, Citation, Role, FAQItem, Persona } from "../types";
 
 export class GeminiService {
   private getAI() {
@@ -56,6 +56,49 @@ export class GeminiService {
       };
     } catch (e) {
       return { text: "API Error", citations: [] };
+    }
+  }
+
+  async generateFAQs(doc: Document, persona: Persona): Promise<Partial<FAQItem>[]> {
+    const ai = this.getAI();
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Analysiere das folgende Dokument des Wohnprojekts.
+        
+        DEINE PERSONA / ZIELGRUPPE:
+        Name: ${persona.name}
+        Beschreibung: ${persona.description}
+        
+        AUFGABE:
+        Extrahiere basierend auf deiner Persona-Beschreibung 2 bis 4 Fragen, die genau DIESE Person an das Dokument stellen würde.
+        Formuliere die Antworten im Stil der Persona (einfach/emotional ODER komplex/fachlich).
+        
+        DOKUMENT:
+        Name: ${doc.name}
+        Kategorie: ${doc.category}
+        Inhalt: ${doc.content.substring(0, 15000)}`,
+        config: {
+          systemInstruction: `Du bist ein spezialisierter FAQ-Generator. Du ignorierst allgemeine Fragen und konzentrierst dich NUR auf das, was die definierte Persona ("${persona.name}") wirklich wissen will.`,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING },
+                answer: { type: Type.STRING },
+                category: { type: Type.STRING }
+              },
+              required: ["question", "answer", "category"]
+            }
+          }
+        }
+      });
+      return JSON.parse(response.text || '[]');
+    } catch (e) {
+      console.error("FAQ generation failed", e);
+      return [];
     }
   }
 

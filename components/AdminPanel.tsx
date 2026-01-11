@@ -1,31 +1,36 @@
 
 import React, { useState, useCallback, useRef } from 'react';
-import { Document as AppDocument, User, Role, UserStatus } from '../types';
-import { PlusIcon, TrashIcon, DocIcon, CloseIcon, UserPlusIcon, CheckCircleIcon, ClockIcon, AlertIcon, ShieldIcon, ArrowRightIcon } from './Icons';
+import { Document as AppDocument, User, Role, UserStatus, Persona } from '../types';
+import { PlusIcon, TrashIcon, DocIcon, CloseIcon, UserPlusIcon, CheckCircleIcon, ClockIcon, AlertIcon, ShieldIcon, ArrowRightIcon, HelpIcon } from './Icons';
 import { gemini } from '../services/geminiService';
 import * as mammoth from 'mammoth';
 import * as pdfjs from 'pdfjs-dist';
 
 // Configure PDF.js worker
-// Using unpkg provides a direct link to the worker script, avoiding dynamic import issues with esm.sh in this context
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
 
 interface AdminPanelProps {
   documents: AppDocument[];
   users: User[];
+  personas: Persona[];
   onAddDoc: (doc: AppDocument) => void;
   onRemoveDoc: (id: string) => void;
   onInviteUser: (email: string, role: Role, content: string) => void;
   onRemoveUser: (id: string) => void;
-  onUpdateUserStatus?: (id: string, status: UserStatus) => void;
-  activeTab: 'docs' | 'users';
-  setActiveTab: (tab: 'docs' | 'users') => void;
+  onAddPersona: (persona: Persona) => void;
+  onUpdatePersona: (persona: Persona) => void;
+  onRemovePersona: (id: string) => void;
+  activeTab: 'docs' | 'users' | 'personas';
+  setActiveTab: (tab: 'docs' | 'users' | 'personas') => void;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
-  documents, users, onAddDoc, onRemoveDoc, onInviteUser, onRemoveUser, onUpdateUserStatus, activeTab, setActiveTab 
+  documents, users, personas, onAddDoc, onRemoveDoc, onInviteUser, onRemoveUser, onAddPersona, onUpdatePersona, onRemovePersona, activeTab, setActiveTab 
 }) => {
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showPersonaModal, setShowPersonaModal] = useState(false);
+  const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
+
   const [inviteStep, setInviteStep] = useState<'input' | 'preview' | 'verifying'>('input');
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
@@ -36,6 +41,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [aiDraft, setAiDraft] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [verificationResult, setVerificationResult] = useState<{ success: boolean; reason: string } | null>(null);
+
+  // Persona State
+  const [personaName, setPersonaName] = useState('');
+  const [personaDesc, setPersonaDesc] = useState('');
+  const [personaRole, setPersonaRole] = useState<'beginner' | 'expert'>('beginner');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -153,6 +163,45 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setVerificationResult(null);
   };
 
+  const handleSavePersona = () => {
+    if (!personaName || !personaDesc) return;
+    
+    if (editingPersona) {
+      onUpdatePersona({
+        ...editingPersona,
+        name: personaName,
+        description: personaDesc,
+        role: personaRole
+      });
+    } else {
+      onAddPersona({
+        id: Math.random().toString(36).substr(2, 9),
+        name: personaName,
+        description: personaDesc,
+        role: personaRole
+      });
+    }
+    setShowPersonaModal(false);
+    setEditingPersona(null);
+    setPersonaName('');
+    setPersonaDesc('');
+  };
+
+  const openPersonaModal = (p?: Persona) => {
+    if (p) {
+      setEditingPersona(p);
+      setPersonaName(p.name);
+      setPersonaDesc(p.description);
+      setPersonaRole(p.role);
+    } else {
+      setEditingPersona(null);
+      setPersonaName('');
+      setPersonaDesc('');
+      setPersonaRole('beginner');
+    }
+    setShowPersonaModal(true);
+  };
+
   const getStatusIcon = (status: UserStatus) => {
     switch (status) {
       case 'aktiv': return <ShieldIcon className="w-5 h-5 text-blue-500" />;
@@ -167,14 +216,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       {/* Sticky Tab Header */}
       <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-4xl mx-auto px-6 pt-10">
-          <div className="flex gap-8">
-            {['docs', 'users'].map(tab => (
+          <div className="flex gap-8 overflow-x-auto no-scrollbar">
+            {['docs', 'users', 'personas'].map(tab => (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
-                className={`pb-4 text-sm font-black uppercase tracking-[0.2em] relative transition-colors ${activeTab === tab ? 'text-black' : 'text-gray-300 hover:text-black'}`}
+                className={`pb-4 text-sm font-black uppercase tracking-[0.2em] relative transition-colors whitespace-nowrap ${activeTab === tab ? 'text-black' : 'text-gray-300 hover:text-black'}`}
               >
-                {tab === 'docs' ? 'Dokumente' : 'Mitglieder'}
+                {tab === 'docs' ? 'Dokumente' : tab === 'users' ? 'Mitglieder' : 'FAQ-Personas'}
                 {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
               </button>
             ))}
@@ -225,7 +274,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   {uploadProgress || 'Wohnpro Wissen hinzufügen'}
                 </h3>
                 <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
-                  Dateien (.pdf, .docx) hier ablegen. Die KI ordnet sie automatisch Themen wie Recht, Vision oder Mitwirkung zu.
+                  Dateien (.pdf, .docx) hier ablegen. Die KI generiert automatisch FAQs für alle aktiven Personas.
                 </p>
               </div>
 
@@ -319,14 +368,63 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             </div>
           )}
+
+          {activeTab === 'personas' && (
+             <div className="space-y-8">
+               <div className="flex items-center justify-between mb-2">
+                 <div>
+                   <p className="text-sm text-gray-400 max-w-md">Konfiguriere "Zielgruppen" für die FAQ-Generierung. Je genauer die Beschreibung, desto treffender die Fragen.</p>
+                 </div>
+                 <button 
+                   onClick={() => openPersonaModal()}
+                   className="bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-gray-800 transition-all active:scale-95 shadow-lg shadow-black/10"
+                 >
+                   <PlusIcon className="w-5 h-5" />
+                   Persona erstellen
+                 </button>
+               </div>
+
+               <div className="grid grid-cols-1 gap-6">
+                 {personas.map(persona => (
+                   <div key={persona.id} className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm hover:shadow-xl transition-all group relative">
+                      <div className="absolute top-8 right-8 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button onClick={() => openPersonaModal(persona)} className="px-4 py-2 bg-gray-100 hover:bg-black hover:text-white rounded-xl text-xs font-bold transition-colors">
+                            Bearbeiten
+                         </button>
+                         {personas.length > 1 && (
+                            <button onClick={() => onRemovePersona(persona.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                               <TrashIcon className="w-4 h-4" />
+                            </button>
+                         )}
+                      </div>
+
+                      <div className="flex items-start gap-6">
+                         <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 ${persona.role === 'expert' ? 'bg-purple-50 text-purple-600' : 'bg-green-50 text-green-600'}`}>
+                            {persona.role === 'expert' ? <ShieldIcon className="w-8 h-8" /> : <HelpIcon className="w-8 h-8" />}
+                         </div>
+                         <div>
+                            <div className="flex items-center gap-3 mb-2">
+                               <h3 className="text-xl font-bold text-gray-900">{persona.name}</h3>
+                               <span className="px-2 py-1 bg-gray-50 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-400">{persona.role === 'expert' ? 'Experte' : 'Einsteiger'}</span>
+                            </div>
+                            <p className="text-gray-500 text-sm leading-relaxed italic border-l-2 border-gray-100 pl-4 py-1">
+                               "{persona.description}"
+                            </p>
+                         </div>
+                      </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
+          )}
         </div>
       </div>
 
-      {/* Invite AI Modal */}
+      {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500">
-            
+            {/* ... invite modal content same as before ... */}
             <div className="p-8 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-50 rounded-xl">
@@ -422,6 +520,66 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Persona Modal */}
+      {showPersonaModal && (
+         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+            <div className="bg-white w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500">
+               <div className="p-8 border-b border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                     <div className="p-2 bg-purple-50 rounded-xl">
+                        <HelpIcon className="w-5 h-5 text-purple-600" />
+                     </div>
+                     <span className="font-black text-sm uppercase tracking-widest">{editingPersona ? 'Persona bearbeiten' : 'Neue FAQ Persona'}</span>
+                  </div>
+                  <button onClick={() => setShowPersonaModal(false)} className="p-2 text-gray-300 hover:text-black transition-colors">
+                     <CloseIcon className="w-6 h-6" />
+                  </button>
+               </div>
+               
+               <div className="p-10 space-y-8">
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Name der Zielgruppe</label>
+                     <input 
+                        type="text" 
+                        value={personaName}
+                        onChange={(e) => setPersonaName(e.target.value)}
+                        placeholder="z.B. 'Der Kritische Nachbar'"
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold focus:outline-none focus:ring-4 focus:ring-purple-500/10 text-lg"
+                     />
+                  </div>
+
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">KI-Prompt / Beschreibung</label>
+                     <textarea 
+                        value={personaDesc}
+                        onChange={(e) => setPersonaDesc(e.target.value)}
+                        placeholder="Beschreibe, was diese Person wissen will und wie die Antworten klingen sollen. Z.B. 'Du bist skeptisch, achtest auf Finanzen und magst kurze Fakten.'"
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-medium focus:outline-none focus:ring-4 focus:ring-purple-500/10 min-h-[120px]"
+                     />
+                     <p className="text-xs text-gray-400 ml-2">Dies ist die direkte Anweisung an die KI, wie sie Fragen aus Dokumenten extrahieren soll.</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                     <button onClick={() => setPersonaRole('beginner')} className={`p-4 rounded-2xl border transition-all text-center ${personaRole === 'beginner' ? 'border-green-500 bg-green-50 text-green-700 font-bold' : 'border-gray-100 text-gray-400'}`}>
+                        Einsteiger / Interessiert
+                     </button>
+                     <button onClick={() => setPersonaRole('expert')} className={`p-4 rounded-2xl border transition-all text-center ${personaRole === 'expert' ? 'border-purple-500 bg-purple-50 text-purple-700 font-bold' : 'border-gray-100 text-gray-400'}`}>
+                        Experte / Detailverliebt
+                     </button>
+                  </div>
+
+                  <button 
+                     onClick={handleSavePersona}
+                     disabled={!personaName || !personaDesc}
+                     className="w-full bg-black text-white rounded-2xl py-5 font-bold hover:bg-gray-900 disabled:bg-gray-100 disabled:text-gray-300 transition-all shadow-xl shadow-black/10"
+                  >
+                     {editingPersona ? 'Änderungen speichern' : 'Persona erstellen'}
+                  </button>
+               </div>
+            </div>
+         </div>
       )}
     </div>
   );

@@ -8,17 +8,32 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --glass: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.4);
+      }
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #ffffff;
+        background-color: #f8fafc;
         color: #1a1a1a;
+        overflow-x: hidden;
       }
       .glass-card {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: var(--glass);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid var(--glass-border);
+      }
+      .perspective-1000 {
+        perspective: 1000px;
+      }
+      .preserve-3d {
+        transform-style: preserve-3d;
+      }
+      .hover-3d:hover {
+        transform: translateZ(20px) rotateX(2deg) rotateY(2deg);
       }
       .safe-bottom {
         padding-bottom: env(safe-area-inset-bottom);
@@ -29,6 +44,16 @@
       .no-scrollbar {
         -ms-overflow-style: none;
         scrollbar-width: none;
+      }
+      @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0); }
+        50% { transform: translateY(-20px) rotate(2deg); }
+      }
+      .animate-float {
+        animation: float 6s ease-in-out infinite;
+      }
+      .glow-green {
+        box-shadow: 0 0 40px -10px rgba(34, 197, 94, 0.3);
       }
     </style>
   <script type="importmap">
@@ -45,7 +70,7 @@
 }
 </script>
 </head>
-  <body>
+  <body class="selection:bg-green-100 selection:text-green-900">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

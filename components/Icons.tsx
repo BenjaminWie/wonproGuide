@@ -8,6 +8,7 @@ import {
   Plus, 
   Trash2, 
   ChevronRight, 
+  ChevronDown,
   Menu, 
   X,
   Clock,
@@ -17,7 +18,8 @@ import {
   CheckCircle2,
   Mail,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  HelpCircle
 } from 'lucide-react';
 
 export const ChatIcon = ({ className = "w-6 h-6" }) => <MessageSquare className={className} />;
@@ -36,3 +38,5 @@ export const CheckCircleIcon = ({ className = "w-6 h-6" }) => <CheckCircle2 clas
 export const MailIcon = ({ className = "w-6 h-6" }) => <Mail className={className} />;
 export const AlertIcon = ({ className = "w-6 h-6" }) => <AlertCircle className={className} />;
 export const ShieldIcon = ({ className = "w-6 h-6" }) => <ShieldCheck className={className} />;
+export const HelpIcon = ({ className = "w-6 h-6" }) => <HelpCircle className={className} />;
+export const ChevronDownIcon = ({ className = "w-6 h-6" }) => <ChevronDown className={className} />;

@@ -1,5 +1,5 @@
 
-import { Document, User, Role } from './types';
+import { Document, User, Role, Persona } from './types';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -26,6 +26,21 @@ export const INITIAL_USERS: User[] = [
 ];
 
 export const INITIAL_DOCUMENTS: Document[] = [];
+
+export const INITIAL_PERSONAS: Persona[] = [
+  {
+    id: 'p1',
+    name: 'Der Interessent',
+    role: 'beginner',
+    description: 'Du bist jemand, der das Wohnprojekt erst kennenlernt. Du stellst Fragen zur Vision, zum "Vibe" und zu den groben Kosten. Du interessierst dich nicht für Paragraphen, sondern für das Lebensgefühl. Deine Fragen sind einfach, emotional und direkt. Deine Antworten sind kurz, einladend und machen Lust auf mehr.'
+  },
+  {
+    id: 'p2',
+    name: 'Der Rechtsexperte',
+    role: 'expert',
+    description: 'Du bist ein langjähriges Mitglied, das sich um die rechtliche Absicherung und Verwaltung kümmert. Du analysierst das Dokument auf Herz und Nieren. Du stellst komplexe Fragen zu Haftung, Fristen, Quoren und finanziellen Risiken. Deine Antworten sind präzise, juristisch fundiert und sehr detailliert.'
+  }
+];
 
 /**
  * System Instruction for the Text-based Chat
