@@ -74,8 +74,21 @@ npm run dev
 
 The application will launch at `http://localhost:3000`.
 
-### Running the Backend Middleware (Optional)
-To enable automatic document conversion via Nextcloud Webhooks, run the Node.js middleware:
+### 🐳 Running with Docker
+
+You can run the entire stack (Frontend + Optional Middleware) using Docker Compose.
+
+1.  Ensure your `.env` file is configured (see above).
+2.  Run the containers:
+    ```bash
+    docker-compose up --build
+    ```
+3.  Access the services:
+    *   **Frontend**: `http://localhost:3000`
+    *   **Backend Middleware**: `http://localhost:3001`
+
+### Running the Backend Middleware (Manual Node.js)
+To enable automatic document conversion via Nextcloud Webhooks without Docker, run the Node.js middleware:
 
 1.  Ensure you have installed backend dependencies: `npm install express webdav mammoth pdf-parse`.
 2.  Run the server:

@@ -1,0 +1,49 @@
+
+version: '3.8'
+
+services:
+  # Main Frontend Application
+  app:
+    build: .
+    container_name: wohnpro-guide-app
+    # Runs the standard start script defined in package.json
+    command: npm start
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount current directory to /app for hot reloading in development
+      - .:/app
+      # Keep node_modules separate to avoid conflicts with host OS
+      - /app/node_modules
+    environment:
+      # Pass environment variables for API configuration
+      - API_KEY=${API_KEY}
+      - GCP_PROJECT=${GCP_PROJECT}
+      - GCP_LOCATION=${GCP_LOCATION}
+      # Nextcloud configuration for the Frontend (Direct client-side or server-proxied calls)
+      - NEXTCLOUD_URL=${NEXTCLOUD_URL}
+      - NEXTCLOUD_USER=${NEXTCLOUD_USER}
+      - NEXTCLOUD_PASSWORD=${NEXTCLOUD_PASSWORD}
+      - NEXTCLOUD_ROOT_FOLDER=${NEXTCLOUD_ROOT_FOLDER}
+    restart: unless-stopped
+
+  # Backend Middleware (For Nextcloud Webhooks)
+  # Only required if you are using the automatic file processing integration
+  middleware:
+    build: .
+    container_name: wohnpro-guide-middleware
+    # Run the backend server using ts-node
+    command: npx ts-node backend/server.ts
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - PORT=3001
+      - NEXTCLOUD_URL=${NEXTCLOUD_URL}
+      - NEXTCLOUD_USER=${NEXTCLOUD_USER}
+      - NEXTCLOUD_PASSWORD=${NEXTCLOUD_PASSWORD}
+      - NEXTCLOUD_ROOT_FOLDER=${NEXTCLOUD_ROOT_FOLDER}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+    restart: unless-stopped
