@@ -32,13 +32,22 @@ You can configure the application to use either **Google AI Studio** (Recommende
 
 #### Option B: Google Cloud Vertex AI
 1.  Ensure you have a Google Cloud Project with the Vertex AI API enabled.
-2.  Configure your `.env` file with the following variables in addition to the API Key:
+2.  Configure your `.env` file with the following variables instead of (or in addition to) the API Key:
     ```bash
     # .env
     GCP_PROJECT=your-gcp-project-id
     GCP_LOCATION=us-central1
     ```
     *Note: If running in a browser environment without a proxy, you may still need to handle authentication (e.g., OAuth tokens) depending on your network setup.*
+
+#### Option C: Nextcloud Backend (Enterprise)
+For production environments where document management and user administration should be handled externally via Nextcloud:
+👉 **[Read the Nextcloud Integration Guide](NEXTCLOUD_INTEGRATION.md)**
+
+This setup allows:
+*   Document management via Nextcloud folders (drag & drop).
+*   Automatic PDF/DOCX to Text conversion via Webhooks.
+*   User management via a `users.csv` file.
 
 ### Running the App
 

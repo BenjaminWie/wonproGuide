@@ -123,7 +123,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             >
               <div className="flex items-start justify-between mb-8">
                 <div className="w-20 h-20 rounded-full border-4 border-white overflow-hidden shadow-xl">
-                  <img src="https://i.pravatar.cc/150?u=hans" alt="Hans" className="w-full h-full object-cover" />
+                  <img src="https://images.unsplash.com/photo-1559526324-593bc81418d9?q=80&w=200&auto=format&fit=crop" alt="Hans" className="w-full h-full object-cover" />
                 </div>
                 <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${activePersona === 'hans' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
                   Best-Ager (72)
