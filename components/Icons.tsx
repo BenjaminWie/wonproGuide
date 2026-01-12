@@ -19,7 +19,10 @@ import {
   Mail,
   AlertCircle,
   ShieldCheck,
-  HelpCircle
+  HelpCircle,
+  ThumbsUp,
+  ThumbsDown,
+  Download
 } from 'lucide-react';
 
 export const ChatIcon = ({ className = "w-6 h-6" }) => <MessageSquare className={className} />;
@@ -40,3 +43,6 @@ export const AlertIcon = ({ className = "w-6 h-6" }) => <AlertCircle className={
 export const ShieldIcon = ({ className = "w-6 h-6" }) => <ShieldCheck className={className} />;
 export const HelpIcon = ({ className = "w-6 h-6" }) => <HelpCircle className={className} />;
 export const ChevronDownIcon = ({ className = "w-6 h-6" }) => <ChevronDown className={className} />;
+export const ThumbsUpIcon = ({ className = "w-6 h-6" }) => <ThumbsUp className={className} />;
+export const ThumbsDownIcon = ({ className = "w-6 h-6" }) => <ThumbsDown className={className} />;
+export const DownloadIcon = ({ className = "w-6 h-6" }) => <Download className={className} />;

@@ -49,6 +49,7 @@ const App: React.FC = () => {
 
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [highlightText, setHighlightText] = useState<string>('');
+  const [highlightSection, setHighlightSection] = useState<string>('');
 
   // Initial Sync with Nextcloud (Runs once on mount)
   useEffect(() => {
@@ -199,13 +200,48 @@ const App: React.FC = () => {
     }, 5000);
   };
 
-  const handleViewDocument = (sourceName: string, textToHighlight?: string) => {
+  const handleViewDocument = (sourceName: string, textToHighlight?: string, sectionToHighlight?: string) => {
     const doc = documents.find(d => d.name === sourceName);
     if (doc) {
       setSelectedDocId(doc.id);
       setHighlightText(textToHighlight || '');
+      setHighlightSection(sectionToHighlight || '');
       setCurrentView('doc-detail');
     }
+  };
+
+  const handleUpdateFaq = (id: string, updates: Partial<FAQItem>) => {
+    setFaqs(prev => prev.map(faq => faq.id === id ? { ...faq, ...updates } : faq));
+  };
+
+  const handleExportFaqs = () => {
+    // CSV Header
+    const headers = ['ID', 'Persona', 'Category', 'Question', 'Answer', 'Source Document', 'Feedback', 'Comment'];
+    
+    // CSV Rows
+    const rows = faqs.map(f => {
+      const pName = personas.find(p => p.id === f.personaId)?.name || 'Unknown';
+      return [
+        f.id,
+        `"${pName.replace(/"/g, '""')}"`,
+        `"${f.category.replace(/"/g, '""')}"`,
+        `"${f.question.replace(/"/g, '""')}"`,
+        `"${f.answer.replace(/"/g, '""')}"`,
+        `"${f.sourceDocName.replace(/"/g, '""')}"`,
+        f.feedback || '',
+        `"${(f.userComment || '').replace(/"/g, '""')}"`
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `wohnpro_faq_export_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (showLanding && !currentUser) {
@@ -301,6 +337,8 @@ const App: React.FC = () => {
             faqs={faqs}
             personas={personas}
             onViewSource={handleViewDocument}
+            onUpdateFaq={handleUpdateFaq}
+            onExport={handleExportFaqs}
           />
         )}
 
@@ -368,6 +406,7 @@ const App: React.FC = () => {
             document={selectedDocument}
             onClose={() => setCurrentView('docs-view')}
             highlightText={highlightText}
+            highlightSection={highlightSection}
           />
         )}
       </main>

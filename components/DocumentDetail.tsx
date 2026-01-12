@@ -7,33 +7,62 @@ interface DocumentDetailProps {
   document: Document;
   onClose: () => void;
   highlightText?: string;
+  highlightSection?: string;
 }
 
-const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onClose, highlightText }) => {
+const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onClose, highlightText, highlightSection }) => {
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (highlightText && contentRef.current) {
-      const mark = contentRef.current.querySelector('mark');
-      if (mark) {
-        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (contentRef.current) {
+       // Priority 1: Highlight Section
+       if (highlightSection) {
+          // Attempt to find an element containing the section text that looks like a header or significant block
+          const elements = Array.from(contentRef.current.querySelectorAll('p, div, span, mark'));
+          const found = elements.find(el => el.textContent?.toLowerCase().includes(highlightSection.toLowerCase()));
+          if (found) {
+            found.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+       }
+
+       // Priority 2: Highlight Text Quote
+       if (highlightText) {
+        const mark = contentRef.current.querySelector('mark');
+        if (mark) {
+          mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
     }
-  }, [highlightText]);
+  }, [highlightText, highlightSection]);
 
-  // Simple function to highlight the text within the content
+  // Function to highlight both the quote and potentially match section headers loosely
   const renderHighlightedContent = () => {
-    if (!highlightText) return document.content;
+    let content = document.content;
 
-    const parts = document.content.split(new RegExp(`(${highlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+    // We do a simple split/map approach for highlighting. 
+    // Note: Complex nested highlighting requires a more robust parser, keeping it simple here.
     
-    return parts.map((part, i) => (
-      part.toLowerCase() === highlightText.toLowerCase() ? (
-        <mark key={i} className="bg-yellow-200 text-black px-1 rounded-sm shadow-sm animate-pulse">
-          {part}
-        </mark>
-      ) : part
-    ));
+    if (!highlightText && !highlightSection) return content;
+
+    const parts = [];
+    // Very basic tokenizer: split by the highlight text
+    // If section highlighting is needed visually, we could wrap matched sections here too, 
+    // but usually scrolling to the area is sufficient for context.
+    
+    if (highlightText) {
+        const regex = new RegExp(`(${highlightText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        const splitContent = content.split(regex);
+        return splitContent.map((part, i) => 
+            part.toLowerCase() === highlightText.toLowerCase() ? (
+                <mark key={i} className="bg-yellow-200 text-black px-1 rounded-sm shadow-sm animate-pulse">
+                    {part}
+                </mark>
+            ) : part
+        );
+    }
+
+    return content;
   };
 
   return (
@@ -45,9 +74,16 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onClose, high
           </div>
           <div>
             <h2 className="font-bold text-gray-900 leading-tight">{document.name}</h2>
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-              {document.category} • Hochgeladen am {document.uploadDate}
-            </p>
+            <div className="flex items-center gap-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                {document.category} • Hochgeladen am {document.uploadDate}
+                </p>
+                {highlightSection && (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white bg-black px-2 py-0.5 rounded-full">
+                        Springe zu: {highlightSection}
+                    </span>
+                )}
+            </div>
           </div>
         </div>
         <button 

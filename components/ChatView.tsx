@@ -7,7 +7,7 @@ interface ChatViewProps {
   messages: Message[];
   onSendMessage: (text: string) => void;
   onEnterVoice: () => void;
-  onViewDocument: (sourceName: string, highlightText?: string) => void;
+  onViewDocument: (sourceName: string, highlightText?: string, highlightSection?: string) => void;
   isLoading: boolean;
 }
 
@@ -100,7 +100,7 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                     {msg.citations!.map((citation, i) => (
                       <button 
                         key={i} 
-                        onClick={() => onViewDocument(citation.source, citation.text)}
+                        onClick={() => onViewDocument(citation.source, citation.text, citation.section)}
                         className="group relative text-left bg-white border border-gray-100 rounded-[2rem] p-5 pr-14 flex gap-5 hover:border-black hover:shadow-xl transition-all duration-500 active:scale-[0.98] overflow-hidden"
                       >
                         <div className="absolute top-0 right-0 bottom-0 w-12 bg-gray-50 flex items-center justify-center border-l border-gray-100 group-hover:bg-black group-hover:border-black transition-all">

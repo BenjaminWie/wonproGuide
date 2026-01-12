@@ -59,6 +59,8 @@ export interface FAQItem {
   sourceDocId: string; // Foreign Key to Document
   sourceDocName: string; // Denormalized name for display
   personaId: string; // Foreign Key to Persona
+  feedback?: 'like' | 'dislike'; // User feedback for pattern recognition
+  userComment?: string; // specific comments for refining the prompt
 }
 
 /**

@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { FAQItem, Persona } from '../types';
-import { HelpIcon, ChevronDownIcon, DocIcon, InfoIcon, ShieldIcon } from './Icons';
+import { HelpIcon, ChevronDownIcon, DocIcon, InfoIcon, ShieldIcon, ThumbsUpIcon, ThumbsDownIcon, DownloadIcon } from './Icons';
 
 interface FAQViewProps {
   faqs: FAQItem[];
   personas: Persona[];
   onViewSource: (docName: string) => void;
+  onUpdateFaq: (id: string, updates: Partial<FAQItem>) => void;
+  onExport: () => void;
 }
 
-const FAQView: React.FC<FAQViewProps> = ({ faqs, personas, onViewSource }) => {
+const FAQView: React.FC<FAQViewProps> = ({ faqs, personas, onViewSource, onUpdateFaq, onExport }) => {
   const [openId, setOpenId] = useState<string | null>(null);
   const [activePersonaId, setActivePersonaId] = useState<string>(personas[0]?.id || '');
   const activeItemRef = useRef<HTMLDivElement>(null);
@@ -56,12 +58,21 @@ const FAQView: React.FC<FAQViewProps> = ({ faqs, personas, onViewSource }) => {
     <div className="flex-1 overflow-y-auto no-scrollbar py-12 px-6">
       <div className="max-w-4xl mx-auto space-y-12">
         <header className="space-y-8">
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-widest">
-              <InfoIcon className="w-3 h-3" />
-              Wohnpro FAQ
-            </div>
-            <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-[0.95]">Häufige Fragen <br /><span className="text-gray-300">aus euren Dokumenten.</span></h1>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  <InfoIcon className="w-3 h-3" />
+                  Wohnpro FAQ
+                </div>
+                <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-[0.95]">Häufige Fragen <br /><span className="text-gray-300">aus euren Dokumenten.</span></h1>
+              </div>
+              <button 
+                onClick={onExport}
+                className="bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-gray-800 transition-all active:scale-95 shadow-xl shadow-black/10 whitespace-nowrap"
+              >
+                 <DownloadIcon className="w-4 h-4" />
+                 Export CSV
+              </button>
           </div>
 
           {/* Persona Selection Tabs */}
@@ -125,7 +136,35 @@ const FAQView: React.FC<FAQViewProps> = ({ faqs, personas, onViewSource }) => {
                           <p className="text-xl text-gray-700 leading-relaxed font-medium italic">
                             "{faq.answer}"
                           </p>
-                          <div className="pt-8 border-t border-gray-200/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                          
+                          {/* Feedback Section */}
+                          <div className="p-6 bg-white rounded-[2rem] border border-gray-100 flex flex-col sm:flex-row gap-6">
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    onClick={() => onUpdateFaq(faq.id, { feedback: 'like' })}
+                                    className={`p-3 rounded-xl transition-all ${faq.feedback === 'like' ? 'bg-green-100 text-green-700' : 'hover:bg-gray-50 text-gray-400'}`}
+                                >
+                                    <ThumbsUpIcon className="w-5 h-5" />
+                                </button>
+                                <button 
+                                    onClick={() => onUpdateFaq(faq.id, { feedback: 'dislike' })}
+                                    className={`p-3 rounded-xl transition-all ${faq.feedback === 'dislike' ? 'bg-red-100 text-red-700' : 'hover:bg-gray-50 text-gray-400'}`}
+                                >
+                                    <ThumbsDownIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="flex-1">
+                                <input 
+                                    type="text" 
+                                    placeholder="Kommentar für KI-Training..." 
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+                                    value={faq.userComment || ''}
+                                    onChange={(e) => onUpdateFaq(faq.id, { userComment: e.target.value })}
+                                />
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-gray-200/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div className="flex items-center gap-4">
                               <div className="p-3 bg-white rounded-2xl shadow-sm border border-gray-50">
                                 <DocIcon className="w-5 h-5 text-gray-400" />
