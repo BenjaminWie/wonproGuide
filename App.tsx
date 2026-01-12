@@ -12,6 +12,7 @@ import LandingPage from './components/LandingPage';
 import FAQView from './components/FAQView';
 import { gemini } from './services/geminiService';
 import { DocIcon } from './components/Icons';
+import { isNextcloudConfigured, fetchNextcloudDocuments, fetchNextcloudUsers } from './services/nextcloudService';
 
 const STORAGE_KEY = 'wohnprojekt_docs_cache';
 const FAQ_STORAGE_KEY = 'wohnprojekt_faq_cache';
@@ -44,9 +45,42 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFaqGenerating, setIsFaqGenerating] = useState(false);
   const [generatingStatus, setGeneratingStatus] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [highlightText, setHighlightText] = useState<string>('');
+
+  // Initial Sync with Nextcloud (Runs once on mount)
+  useEffect(() => {
+    const syncWithNextcloud = async () => {
+      if (isNextcloudConfigured()) {
+        console.log("Starting Nextcloud Sync...");
+        setIsSyncing(true);
+        try {
+          // 1. Fetch Users
+          const ncUsers = await fetchNextcloudUsers();
+          if (ncUsers.length > 0) {
+            setUsers(ncUsers);
+          }
+
+          // 2. Fetch Documents (Smart Sync using ETags)
+          // We pass current documents for ETag optimization.
+          // Note: fetchNextcloudDocuments returns 'currentDocs' if network fails,
+          // so it is safe to always setDocuments with the result.
+          const ncDocs = await fetchNextcloudDocuments(documents);
+          setDocuments(ncDocs);
+
+        } catch (e) {
+          console.error("Sync failed", e);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    syncWithNextcloud();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array = run once on mount
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
@@ -61,6 +95,7 @@ const App: React.FC = () => {
   }, [personas]);
 
   const handleLogin = (email: string) => {
+    // If we have users loaded (from NC or Init), check them
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
     if (user) {
       setCurrentUser(user);
@@ -178,7 +213,16 @@ const App: React.FC = () => {
   }
 
   if (!currentUser) {
-    return <LoginView onLogin={handleLogin} />;
+    return (
+      <>
+        {isSyncing && (
+          <div className="fixed top-4 right-4 z-[100] bg-blue-600 text-white px-4 py-2 rounded-full text-xs font-bold animate-pulse shadow-lg">
+            Synchronisiere mit Nextcloud...
+          </div>
+        )}
+        <LoginView onLogin={handleLogin} />
+      </>
+    );
   }
 
   const selectedDocument = documents.find(d => d.id === selectedDocId);
@@ -208,6 +252,15 @@ const App: React.FC = () => {
           <span className="font-bold text-gray-900 tracking-tight">Wohnpro Guide</span>
           <div className="w-10" />
         </header>
+
+        {isSyncing && (
+          <div className="absolute top-20 right-4 lg:top-4 z-50 animate-in slide-in-from-right-10 fade-in duration-700">
+             <div className="bg-blue-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg">
+               <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+               <span className="text-xs font-bold">Cloud Sync...</span>
+             </div>
+          </div>
+        )}
 
         {isFaqGenerating && (
           <div className="absolute top-4 right-4 z-50 animate-in slide-in-from-right-10 fade-in duration-700">

@@ -17,7 +17,7 @@ Der zentrale Wissens- und Orientierungsort für gemeinschaftliches Wohnen. Ein K
     npm install
     ```
 
-### Configuration
+### Configuration Options
 
 You can configure the application to use either **Google AI Studio** (Recommended for quick start) or **Google Cloud Vertex AI** (Recommended for enterprise).
 
@@ -49,6 +49,21 @@ This setup allows:
 *   Automatic PDF/DOCX to Text conversion via Webhooks.
 *   User management via a `users.csv` file.
 
+### ⚙️ Configuration Reference
+
+The application can be configured using environment variables (e.g., in a `.env` file).
+
+| Variable | Description | Required For |
+| :--- | :--- | :--- |
+| `API_KEY` | Google Gemini API Key. | **Standard Mode** |
+| `GCP_PROJECT` | Google Cloud Project ID. | Vertex AI Mode |
+| `GCP_LOCATION` | Google Cloud Region (e.g. `us-central1`). | Vertex AI Mode |
+| `NEXTCLOUD_URL` | Base URL of your Nextcloud instance (e.g. `https://cloud.example.com`). | **Nextcloud Mode** |
+| `NEXTCLOUD_USER` | Username or Bot Account name for WebDAV access. | **Nextcloud Mode** |
+| `NEXTCLOUD_PASSWORD` | App Password for the user (Generated in Nextcloud Security Settings). | **Nextcloud Mode** |
+| `NEXTCLOUD_ROOT_FOLDER` | The root folder name where `02-Bot-Memory` resides. Default: `FAQ-Bot-Project`. | **Nextcloud Mode** |
+| `WEBHOOK_SECRET` | Secret token to verify webhook requests in the backend. | **Backend Server** |
+
 ### Running the App
 
 ```bash
@@ -58,6 +73,17 @@ npm run dev
 ```
 
 The application will launch at `http://localhost:3000`.
+
+### Running the Backend Middleware (Optional)
+To enable automatic document conversion via Nextcloud Webhooks, run the Node.js middleware:
+
+1.  Ensure you have installed backend dependencies: `npm install express webdav mammoth pdf-parse`.
+2.  Run the server:
+    ```bash
+    ts-node backend/server.ts
+    ```
+    (Or compile TS to JS and run with node).
+3.  Configure your Nextcloud Webhook to point to `http://YOUR_SERVER_IP:3001/nextcloud-webhook?secret=YOUR_SECRET`.
 
 ---
 
@@ -87,4 +113,3 @@ Currently, this application uses the browser's `localStorage` for persistence. F
 | `personas` | Defines target audiences for dynamic FAQ generation. Contains the "Meta-Prompt". |
 | `faqs` | Stores pre-generated questions and answers linked to `documents` and `personas`. |
 | `chat_sessions` | Stores conversation history. |
-

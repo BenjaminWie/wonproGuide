@@ -32,6 +32,7 @@ export interface Document {
   content: string; // TEXT column in DB - used for RAG context window
   status: 'aktiv' | 'archiviert';
   fileUrl?: string; // Optional URL to original file storage (S3/GCS)
+  etag?: string; // WebDAV ETag for sync optimization
 }
 
 /**
