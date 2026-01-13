@@ -1,7 +1,7 @@
 import express from 'express';
 import { createClient, AuthType } from 'webdav';
 import mammoth from 'mammoth';
-import pdf from 'pdf-parse';
+import * as pdf from 'pdf-parse';
 
 // --- Configuration ---
 const PORT = process.env.PORT || 3001;
