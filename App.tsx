@@ -280,7 +280,11 @@ const App: React.FC = () => {
       
       <main className="flex-1 h-full relative overflow-hidden flex flex-col pt-4 lg:pt-0">
         <header className="flex items-center justify-between px-6 py-4 lg:hidden border-b border-gray-100 bg-white z-10">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-2 hover:bg-gray-50 rounded-full transition-colors"
+            aria-label="Menü öffnen"
+          >
             <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
             </svg>
