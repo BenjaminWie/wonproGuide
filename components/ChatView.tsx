@@ -175,6 +175,8 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                     ? 'bg-black text-white shadow-xl shadow-black/20 hover:bg-gray-900' 
                     : 'bg-gray-50 text-gray-300 cursor-not-allowed'
                   }`}
+                  aria-label="Nachricht senden"
+                  title="Nachricht senden"
                 >
                   <ArrowRightIcon className="w-7 h-7" />
                 </button>
