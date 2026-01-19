@@ -95,13 +95,17 @@ const App: React.FC = () => {
     localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(personas));
   }, [personas]);
 
-  const handleLogin = (email: string) => {
-    // If we have users loaded (from NC or Init), check them
+  const handleLogin = async (email: string): Promise<void> => {
+    // Simulate network delay for login process
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
     if (user) {
       setCurrentUser(user);
     } else {
       alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
+      // Throw an error to signal login failure
+      throw new Error("Login failed");
     }
   };
 
