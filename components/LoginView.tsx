@@ -3,21 +3,29 @@ import React, { useState } from 'react';
 import { User } from '../types';
 
 interface LoginViewProps {
-  onLogin: (email: string) => void;
+  onLogin: (email: string) => Promise<void>;
   error?: string;
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
   const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(externalError || '');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
       setError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
       return;
     }
-    onLogin(email);
+    setIsLoading(true);
+    try {
+      await onLogin(email);
+    } catch (e) {
+      // Errors are handled in the parent, but we ensure loading stops
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -48,9 +56,26 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
 
           <button
             type="submit"
-            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
+            disabled={isLoading}
+            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5 disabled:opacity-75 flex items-center justify-center"
           >
-            Guide öffnen
+            {isLoading ? (
+              <>
+                <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.75V6.25" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.125 6.875L16.065 7.935" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.25 12L17.75 12" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.125 17.125L16.065 16.065" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19.25V17.75" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6.875 17.125L7.935 16.065" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.75 12L6.25 12" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6.875 6.875L7.935 7.935" />
+                </svg>
+                <span>Prüfung...</span>
+              </>
+            ) : (
+              'Guide öffnen'
+            )}
           </button>
         </form>
 
