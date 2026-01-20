@@ -95,14 +95,20 @@ const App: React.FC = () => {
     localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(personas));
   }, [personas]);
 
-  const handleLogin = (email: string) => {
-    // If we have users loaded (from NC or Init), check them
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
-    if (user) {
-      setCurrentUser(user);
-    } else {
-      alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
-    }
+  const handleLogin = (email: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
+        if (user) {
+          setCurrentUser(user);
+          resolve(true);
+        } else {
+          // In a real app, you'd show a proper error message.
+          // alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
+          resolve(false);
+        }
+      }, 1500); // Simulate network delay
+    });
   };
 
   const sendMessage = async (text: string) => {
