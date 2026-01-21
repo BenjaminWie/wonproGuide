@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
+import { Spinner } from './Icons';
 
 interface LoginViewProps {
   onLogin: (email: string) => void;
@@ -9,6 +10,7 @@ interface LoginViewProps {
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
   const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(externalError || '');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -17,6 +19,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
       setError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
       return;
     }
+    setIsLoading(true);
     onLogin(email);
   };
 
@@ -48,9 +51,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
 
           <button
             type="submit"
-            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
+            disabled={isLoading}
+            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5 flex items-center justify-center disabled:opacity-50"
           >
-            Guide öffnen
+            {isLoading ? <Spinner className="w-7 h-7" /> : 'Guide öffnen'}
           </button>
         </form>
 
