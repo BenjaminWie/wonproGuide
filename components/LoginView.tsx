@@ -1,13 +1,14 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
+import { Spinner } from './Icons';
 
 interface LoginViewProps {
   onLogin: (email: string) => void;
   error?: string;
+  isLoading?: boolean;
 }
 
-const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
+const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError, isLoading }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState(externalError || '');
 
@@ -42,15 +43,17 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
               placeholder="Wohnpro E-Mail Adresse"
               className={`w-full bg-gray-50 border ${error ? 'border-red-200' : 'border-gray-100'} rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all text-lg placeholder:text-gray-300`}
+              disabled={isLoading}
             />
             {error && <p className="mt-2 text-sm text-red-500 text-left px-2">{error}</p>}
           </div>
 
           <button
             type="submit"
-            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
+            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            disabled={isLoading}
           >
-            Guide öffnen
+            {isLoading ? <Spinner className="w-7 h-7" /> : 'Guide öffnen'}
           </button>
         </form>
 
