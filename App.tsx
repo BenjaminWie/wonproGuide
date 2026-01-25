@@ -95,14 +95,19 @@ const App: React.FC = () => {
     localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(personas));
   }, [personas]);
 
-  const handleLogin = (email: string) => {
-    // If we have users loaded (from NC or Init), check them
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
-    if (user) {
-      setCurrentUser(user);
-    } else {
-      alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
-    }
+  const handleLogin = (email: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      // Simulate network delay for better UX
+      setTimeout(() => {
+        const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
+        if (user) {
+          setCurrentUser(user);
+          resolve();
+        } else {
+          reject(new Error("Zugang verweigert. Falsche E-Mail oder Einladung steht noch aus."));
+        }
+      }, 1000);
+    });
   };
 
   const sendMessage = async (text: string) => {
