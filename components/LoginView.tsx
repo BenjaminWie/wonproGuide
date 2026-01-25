@@ -3,21 +3,29 @@ import React, { useState } from 'react';
 import { User } from '../types';
 
 interface LoginViewProps {
-  onLogin: (email: string) => void;
+  onLogin: (email: string) => Promise<void>;
   error?: string;
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
   const [email, setEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(externalError || '');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
       setError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
       return;
     }
-    onLogin(email);
+    setIsLoading(true);
+    setError('');
+    try {
+      await onLogin(email);
+    } catch (err: any) {
+      setError(err.message);
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -48,9 +56,14 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
 
           <button
             type="submit"
-            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
+            disabled={isLoading}
+            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5 flex items-center justify-center disabled:opacity-75"
           >
-            Guide öffnen
+            {isLoading ? (
+              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              'Guide öffnen'
+            )}
           </button>
         </form>
 
