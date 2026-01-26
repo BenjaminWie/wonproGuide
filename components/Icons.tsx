@@ -22,9 +22,11 @@ import {
   HelpCircle,
   ThumbsUp,
   ThumbsDown,
-  Download
+  Download,
+  Loader
 } from 'lucide-react';
 
+export const LoaderIcon = ({ className = "w-6 h-6" }) => <Loader className={className} />;
 export const ChatIcon = ({ className = "w-6 h-6" }) => <MessageSquare className={className} />;
 export const MicIcon = ({ className = "w-6 h-6" }) => <Mic className={className} />;
 export const DocIcon = ({ className = "w-6 h-6" }) => <FileText className={className} />;
