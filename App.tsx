@@ -21,6 +21,7 @@ const PERSONA_STORAGE_KEY = 'wohnprojekt_persona_cache';
 const App: React.FC = () => {
   const [showLanding, setShowLanding] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [currentView, setCurrentView] = useState<View>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
@@ -95,13 +96,23 @@ const App: React.FC = () => {
     localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(personas));
   }, [personas]);
 
-  const handleLogin = (email: string) => {
-    // If we have users loaded (from NC or Init), check them
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
-    if (user) {
+  const handleLogin = async (email: string) => {
+    setIsLoggingIn(true);
+    try {
+      // Simulate network delay for better UX
+      await new Promise(resolve => setTimeout(resolve, 750));
+      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
+
+      if (!user) {
+        throw new Error("User not found or inactive.");
+      }
+
       setCurrentUser(user);
-    } else {
+    } catch (error) {
+      console.error("Login attempt failed:", error);
       alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -256,7 +267,7 @@ const App: React.FC = () => {
             Synchronisiere mit Nextcloud...
           </div>
         )}
-        <LoginView onLogin={handleLogin} />
+        <LoginView onLogin={handleLogin} isLoading={isLoggingIn} />
       </>
     );
   }
