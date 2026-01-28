@@ -46,6 +46,7 @@ const App: React.FC = () => {
   const [isFaqGenerating, setIsFaqGenerating] = useState(false);
   const [generatingStatus, setGeneratingStatus] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [loginError, setLoginError] = useState<string | undefined>(undefined);
 
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [highlightText, setHighlightText] = useState<string>('');
@@ -96,13 +97,16 @@ const App: React.FC = () => {
   }, [personas]);
 
   const handleLogin = (email: string) => {
-    // If we have users loaded (from NC or Init), check them
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
-    if (user) {
-      setCurrentUser(user);
-    } else {
-      alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
-    }
+    setLoginError(undefined);
+    // Simulate network delay
+    setTimeout(() => {
+      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
+      if (user) {
+        setCurrentUser(user);
+      } else {
+        setLoginError("Zugang verweigert. Prüfe deine E-Mail oder frage die Verwaltung.");
+      }
+    }, 1200);
   };
 
   const sendMessage = async (text: string) => {
@@ -256,7 +260,7 @@ const App: React.FC = () => {
             Synchronisiere mit Nextcloud...
           </div>
         )}
-        <LoginView onLogin={handleLogin} />
+        <LoginView onLogin={handleLogin} error={loginError} />
       </>
     );
   }

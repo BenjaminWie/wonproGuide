@@ -1,6 +1,5 @@
 
-import React, { useState } from 'react';
-import { User } from '../types';
+import React, { useState, useEffect } from 'react';
 
 interface LoginViewProps {
   onLogin: (email: string) => void;
@@ -9,14 +8,26 @@ interface LoginViewProps {
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
   const [email, setEmail] = useState('');
-  const [error, setError] = useState(externalError || '');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (externalError) {
+      setError(externalError);
+      setIsLoading(false);
+    }
+  }, [externalError]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
+
     if (!email) {
       setError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
       return;
     }
+    setIsLoading(true);
+    setError('');
     onLogin(email);
   };
 
@@ -48,9 +59,18 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
 
           <button
             type="submit"
-            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
+            disabled={isLoading}
+            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5 disabled:bg-gray-800 disabled:cursor-not-allowed flex items-center justify-center"
+            aria-live="polite"
           >
-            Guide öffnen
+            {isLoading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3" />
+                <span>Wird geladen...</span>
+              </>
+            ) : (
+              'Guide öffnen'
+            )}
           </button>
         </form>
 
