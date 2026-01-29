@@ -5,9 +5,10 @@ import { User } from '../types';
 interface LoginViewProps {
   onLogin: (email: string) => void;
   error?: string;
+  isLoading?: boolean;
 }
 
-const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
+const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError, isLoading = false }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState(externalError || '');
 
@@ -48,9 +49,16 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
 
           <button
             type="submit"
-            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
+            disabled={isLoading}
+            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5 disabled:bg-gray-800 disabled:cursor-not-allowed flex items-center justify-center gap-3"
           >
-            Guide öffnen
+            {isLoading && (
+              <>
+                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                <span className="sr-only">Wird geladen...</span>
+              </>
+            )}
+            {isLoading ? 'Prüfe Zugang...' : 'Guide öffnen'}
           </button>
         </form>
 
