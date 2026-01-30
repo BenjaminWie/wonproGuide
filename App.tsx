@@ -43,6 +43,7 @@ const App: React.FC = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isFaqGenerating, setIsFaqGenerating] = useState(false);
   const [generatingStatus, setGeneratingStatus] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -96,6 +97,7 @@ const App: React.FC = () => {
   }, [personas]);
 
   const handleLogin = (email: string) => {
+    setIsLoggingIn(true);
     // If we have users loaded (from NC or Init), check them
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
     if (user) {
@@ -103,6 +105,7 @@ const App: React.FC = () => {
     } else {
       alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
     }
+    setIsLoggingIn(false);
   };
 
   const sendMessage = async (text: string) => {
@@ -256,7 +259,7 @@ const App: React.FC = () => {
             Synchronisiere mit Nextcloud...
           </div>
         )}
-        <LoginView onLogin={handleLogin} />
+        <LoginView onLogin={handleLogin} isLoading={isLoggingIn} />
       </>
     );
   }
