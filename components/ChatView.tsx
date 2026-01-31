@@ -164,12 +164,14 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                   onClick={onEnterVoice}
                   className="p-3.5 text-gray-400 hover:text-green-600 transition-all rounded-full hover:bg-gray-50 active:scale-90"
                   title="Sprachmodus"
+                  aria-label="Sprachmodus starten"
                 >
                   <MicIcon className="w-7 h-7" />
                 </button>
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
+                  aria-label="Nachricht senden"
                   className={`p-4 rounded-full transition-all active:scale-90 ${
                     input.trim() && !isLoading 
                     ? 'bg-black text-white shadow-xl shadow-black/20 hover:bg-gray-900' 

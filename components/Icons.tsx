@@ -22,10 +22,12 @@ import {
   HelpCircle,
   ThumbsUp,
   ThumbsDown,
-  Download
+  Download,
+  Loader2
 } from 'lucide-react';
 
 export const ChatIcon = ({ className = "w-6 h-6" }) => <MessageSquare className={className} />;
+export const LoadingIcon = ({ className = "w-6 h-6" }) => <Loader2 className={`animate-spin ${className}`} />;
 export const MicIcon = ({ className = "w-6 h-6" }) => <Mic className={className} />;
 export const DocIcon = ({ className = "w-6 h-6" }) => <FileText className={className} />;
 export const SettingsIcon = ({ className = "w-6 h-6" }) => <Settings className={className} />;

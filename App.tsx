@@ -100,9 +100,9 @@ const App: React.FC = () => {
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
     if (user) {
       setCurrentUser(user);
-    } else {
-      alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
+      return true;
     }
+    return false;
   };
 
   const sendMessage = async (text: string) => {
