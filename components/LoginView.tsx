@@ -1,23 +1,31 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
+import { LoadingIcon } from './Icons';
 
 interface LoginViewProps {
-  onLogin: (email: string) => void;
+  onLogin: (email: string) => boolean;
   error?: string;
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState(externalError || '');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
       setError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
       return;
     }
-    onLogin(email);
+
+    setIsLoading(true);
+    const success = onLogin(email);
+    if (!success) {
+      setError('Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich anmelden.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -35,22 +43,39 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative group">
+          <div className="relative group text-left">
+            <label htmlFor="email-input" className="sr-only">Wohnpro E-Mail Adresse</label>
             <input
+              id="email-input"
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
               placeholder="Wohnpro E-Mail Adresse"
-              className={`w-full bg-gray-50 border ${error ? 'border-red-200' : 'border-gray-100'} rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all text-lg placeholder:text-gray-300`}
+              disabled={isLoading}
+              aria-invalid={!!error}
+              aria-describedby={error ? "email-error" : undefined}
+              className={`w-full bg-gray-50 border ${error ? 'border-red-200' : 'border-gray-100'} rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all text-lg placeholder:text-gray-300 disabled:opacity-50`}
             />
-            {error && <p className="mt-2 text-sm text-red-500 text-left px-2">{error}</p>}
+            {error && (
+              <p id="email-error" className="mt-2 text-sm text-red-500 px-2 animate-in fade-in slide-in-from-top-1">
+                {error}
+              </p>
+            )}
           </div>
 
           <button
             type="submit"
-            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
+            disabled={isLoading}
+            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5 flex items-center justify-center gap-2 disabled:opacity-70 disabled:active:scale-100"
           >
-            Guide öffnen
+            {isLoading ? (
+              <>
+                <LoadingIcon className="w-5 h-5" />
+                <span className="sr-only">Wird geladen...</span>
+              </>
+            ) : (
+              'Guide öffnen'
+            )}
           </button>
         </form>
 
