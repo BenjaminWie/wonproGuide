@@ -1,15 +1,23 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 
 interface LoginViewProps {
-  onLogin: (email: string) => void;
+  onLogin: (email: string) => boolean;
   error?: string;
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState(externalError || '');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (externalError) {
+      setError(externalError);
+      setIsLoading(false);
+    }
+  }, [externalError]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,7 +25,12 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
       setError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
       return;
     }
-    onLogin(email);
+    setIsLoading(true);
+    const success = onLogin(email);
+    if (!success) {
+      setError('Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich anmelden.');
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -25,7 +38,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
       <div className="w-full max-w-sm text-center">
         <div className="mb-12">
           <div className="w-16 h-16 bg-black rounded-3xl mx-auto flex items-center justify-center mb-6 shadow-xl shadow-black/10">
-            <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
@@ -35,22 +48,36 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative group">
+          <div className="relative group text-left">
+            <label htmlFor="email-input" className="sr-only">
+              Wohnpro E-Mail Adresse
+            </label>
             <input
+              id="email-input"
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
               placeholder="Wohnpro E-Mail Adresse"
+              aria-invalid={!!error}
+              aria-describedby={error ? "email-error" : undefined}
               className={`w-full bg-gray-50 border ${error ? 'border-red-200' : 'border-gray-100'} rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all text-lg placeholder:text-gray-300`}
             />
-            {error && <p className="mt-2 text-sm text-red-500 text-left px-2">{error}</p>}
+            {error && <p id="email-error" className="mt-2 text-sm text-red-500 px-2">{error}</p>}
           </div>
 
           <button
             type="submit"
-            className="w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5"
+            disabled={isLoading}
+            className={`w-full bg-black text-white rounded-2xl py-4 font-semibold text-lg hover:bg-gray-900 active:scale-[0.98] transition-all shadow-lg shadow-black/5 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            Guide öffnen
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                Guide wird geöffnet...
+                <span className="sr-only">Wird geladen...</span>
+              </span>
+            ) : (
+              'Guide öffnen'
+            )}
           </button>
         </form>
 
