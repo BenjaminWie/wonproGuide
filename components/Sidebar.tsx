@@ -27,7 +27,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sessions, currentVie
         <div className="flex flex-col h-full p-6">
           <div className="flex items-center justify-between mb-8 lg:hidden">
             <span className="font-semibold text-xl tracking-tight">Wohnpro Guide</span>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full"
+              aria-label="Menü schließen"
+            >
               <CloseIcon className="w-5 h-5" />
             </button>
           </div>

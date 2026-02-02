@@ -80,6 +80,8 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                   {/* Expand Hint Button */}
                   <button 
                     onClick={() => toggleCitations(idx)}
+                    aria-expanded={isExpanded}
+                    aria-controls={`citations-${idx}`}
                     className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 group/hint border ${
                       isExpanded 
                       ? 'bg-black text-white border-black mb-4' 
@@ -94,7 +96,9 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                   </button>
 
                   {/* Collapsible Citations View */}
-                  <div className={`grid grid-cols-1 gap-3 w-full transition-all duration-500 ease-in-out overflow-hidden ${
+                  <div
+                    id={`citations-${idx}`}
+                    className={`grid grid-cols-1 gap-3 w-full transition-all duration-500 ease-in-out overflow-hidden ${
                     isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'
                   }`}>
                     {msg.citations!.map((citation, i) => (
@@ -132,7 +136,10 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
         })}
 
         {isLoading && (
-          <div className="flex justify-start animate-in fade-in slide-in-from-left-4 duration-500">
+          <div
+            className="flex justify-start animate-in fade-in slide-in-from-left-4 duration-500"
+            aria-live="polite"
+          >
             <div className="bg-white border border-gray-100 px-7 py-5 rounded-[2.2rem] rounded-tl-none shadow-sm flex items-center gap-4">
               <div className="flex gap-1.5">
                 <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce [animation-duration:1s]" />
@@ -150,7 +157,9 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
           <form onSubmit={handleSubmit} className="relative group">
             <div className="absolute inset-0 bg-black/5 blur-3xl rounded-full opacity-0 group-focus-within:opacity-100 transition-all duration-1000" />
             <div className="relative flex items-center">
+              <label htmlFor="chat-input" className="sr-only">Frag den Wohnpro Guide</label>
               <input
+                id="chat-input"
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -164,6 +173,7 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                   onClick={onEnterVoice}
                   className="p-3.5 text-gray-400 hover:text-green-600 transition-all rounded-full hover:bg-gray-50 active:scale-90"
                   title="Sprachmodus"
+                  aria-label="Sprachmodus öffnen"
                 >
                   <MicIcon className="w-7 h-7" />
                 </button>
@@ -175,6 +185,7 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                     ? 'bg-black text-white shadow-xl shadow-black/20 hover:bg-gray-900' 
                     : 'bg-gray-50 text-gray-300 cursor-not-allowed'
                   }`}
+                  aria-label="Nachricht senden"
                 >
                   <ArrowRightIcon className="w-7 h-7" />
                 </button>
