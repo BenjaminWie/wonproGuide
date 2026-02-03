@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [loginError, setLoginError] = useState<string>('');
   
   const [documents, setDocuments] = useState<Document[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -96,12 +97,13 @@ const App: React.FC = () => {
   }, [personas]);
 
   const handleLogin = (email: string) => {
+    setLoginError('');
     // If we have users loaded (from NC or Init), check them
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
     if (user) {
       setCurrentUser(user);
     } else {
-      alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
+      setLoginError("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
     }
   };
 
@@ -256,7 +258,7 @@ const App: React.FC = () => {
             Synchronisiere mit Nextcloud...
           </div>
         )}
-        <LoginView onLogin={handleLogin} />
+        <LoginView onLogin={handleLogin} error={loginError} />
       </>
     );
   }
