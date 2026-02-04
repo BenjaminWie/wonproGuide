@@ -49,7 +49,7 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center animate-in fade-in slide-in-from-bottom-12 duration-1000">
             <div className="w-24 h-24 bg-black rounded-[2.5rem] flex items-center justify-center mb-10 shadow-2xl shadow-black/20 ring-4 ring-black/5 ring-offset-4 ring-offset-white">
-              <ChatIcon className="w-12 h-12 text-white" />
+              <ChatIcon className="w-12 h-12 text-white" aria-hidden="true" />
             </div>
             <h1 className="text-4xl font-semibold tracking-tight mb-4 text-gray-900">Wie funktioniert unser Wohnpro?</h1>
             <p className="text-gray-400 max-w-sm mx-auto leading-relaxed text-lg">
@@ -80,6 +80,8 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                   {/* Expand Hint Button */}
                   <button 
                     onClick={() => toggleCitations(idx)}
+                    aria-expanded={isExpanded}
+                    aria-controls={`citations-${idx}`}
                     className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 group/hint border ${
                       isExpanded 
                       ? 'bg-black text-white border-black mb-4' 
@@ -90,11 +92,13 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">
                       {msg.citations!.length} {msg.citations!.length === 1 ? 'Beleg' : 'Belege'} im Wohnpro Guide gefunden
                     </span>
-                    <ArrowRightIcon className={`w-3 h-3 transition-transform duration-500 ${isExpanded ? 'rotate-90' : 'rotate-0'}`} />
+                    <ArrowRightIcon className={`w-3 h-3 transition-transform duration-500 ${isExpanded ? 'rotate-90' : 'rotate-0'}`} aria-hidden="true" />
                   </button>
 
                   {/* Collapsible Citations View */}
-                  <div className={`grid grid-cols-1 gap-3 w-full transition-all duration-500 ease-in-out overflow-hidden ${
+                  <div
+                    id={`citations-${idx}`}
+                    className={`grid grid-cols-1 gap-3 w-full transition-all duration-500 ease-in-out overflow-hidden ${
                     isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'
                   }`}>
                     {msg.citations!.map((citation, i) => (
@@ -104,11 +108,11 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                         className="group relative text-left bg-white border border-gray-100 rounded-[2rem] p-5 pr-14 flex gap-5 hover:border-black hover:shadow-xl transition-all duration-500 active:scale-[0.98] overflow-hidden"
                       >
                         <div className="absolute top-0 right-0 bottom-0 w-12 bg-gray-50 flex items-center justify-center border-l border-gray-100 group-hover:bg-black group-hover:border-black transition-all">
-                          <ArrowRightIcon className="w-4 h-4 text-gray-300 group-hover:text-white transition-colors" />
+                          <ArrowRightIcon className="w-4 h-4 text-gray-300 group-hover:text-white transition-colors" aria-hidden="true" />
                         </div>
                         
                         <div className="p-3 bg-gray-50 rounded-xl shrink-0 group-hover:bg-green-50 transition-colors">
-                          <DocIcon className="w-6 h-6 text-gray-400 group-hover:text-green-600" />
+                          <DocIcon className="w-6 h-6 text-gray-400 group-hover:text-green-600" aria-hidden="true" />
                         </div>
                         
                         <div className="flex-1 min-w-0">
@@ -133,7 +137,7 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
 
         {isLoading && (
           <div className="flex justify-start animate-in fade-in slide-in-from-left-4 duration-500">
-            <div className="bg-white border border-gray-100 px-7 py-5 rounded-[2.2rem] rounded-tl-none shadow-sm flex items-center gap-4">
+            <div role="status" aria-live="polite" className="bg-white border border-gray-100 px-7 py-5 rounded-[2.2rem] rounded-tl-none shadow-sm flex items-center gap-4">
               <div className="flex gap-1.5">
                 <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce [animation-duration:1s]" />
                 <div className="w-2 h-2 bg-gray-300 rounded-full animate-bounce [animation-duration:1s] [animation-delay:0.2s]" />
@@ -150,7 +154,11 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
           <form onSubmit={handleSubmit} className="relative group">
             <div className="absolute inset-0 bg-black/5 blur-3xl rounded-full opacity-0 group-focus-within:opacity-100 transition-all duration-1000" />
             <div className="relative flex items-center">
+              <label htmlFor="chat-input" className="sr-only">
+                Deine Frage zum Wohnpro
+              </label>
               <input
+                id="chat-input"
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -164,19 +172,21 @@ const ChatView: React.FC<ChatViewProps> = ({ messages, onSendMessage, onEnterVoi
                   onClick={onEnterVoice}
                   className="p-3.5 text-gray-400 hover:text-green-600 transition-all rounded-full hover:bg-gray-50 active:scale-90"
                   title="Sprachmodus"
+                  aria-label="Sprachmodus"
                 >
-                  <MicIcon className="w-7 h-7" />
+                  <MicIcon className="w-7 h-7" aria-hidden="true" />
                 </button>
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
+                  aria-label="Nachricht senden"
                   className={`p-4 rounded-full transition-all active:scale-90 ${
                     input.trim() && !isLoading 
                     ? 'bg-black text-white shadow-xl shadow-black/20 hover:bg-gray-900' 
                     : 'bg-gray-50 text-gray-300 cursor-not-allowed'
                   }`}
                 >
-                  <ArrowRightIcon className="w-7 h-7" />
+                  <ArrowRightIcon className="w-7 h-7" aria-hidden="true" />
                 </button>
               </div>
             </div>

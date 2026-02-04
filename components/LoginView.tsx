@@ -25,7 +25,7 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
       <div className="w-full max-w-sm text-center">
         <div className="mb-12">
           <div className="w-16 h-16 bg-black rounded-3xl mx-auto flex items-center justify-center mb-6 shadow-xl shadow-black/10">
-            <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg aria-hidden="true" className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
@@ -36,14 +36,24 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative group">
+            <label htmlFor="email-input" className="sr-only">
+              Wohnpro E-Mail Adresse
+            </label>
             <input
+              id="email-input"
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
               placeholder="Wohnpro E-Mail Adresse"
+              aria-invalid={!!error}
+              aria-describedby={error ? "email-error" : undefined}
               className={`w-full bg-gray-50 border ${error ? 'border-red-200' : 'border-gray-100'} rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all text-lg placeholder:text-gray-300`}
             />
-            {error && <p className="mt-2 text-sm text-red-500 text-left px-2">{error}</p>}
+            {error && (
+              <p id="email-error" role="alert" className="mt-2 text-sm text-red-500 text-left px-2">
+                {error}
+              </p>
+            )}
           </div>
 
           <button
