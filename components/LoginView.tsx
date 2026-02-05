@@ -10,6 +10,13 @@ interface LoginViewProps {
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState(externalError || '');
+  const [prevExternalError, setPrevExternalError] = useState(externalError);
+
+  // Derived state pattern to sync external error prop
+  if (externalError !== prevExternalError) {
+    setError(externalError || '');
+    setPrevExternalError(externalError);
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,14 +43,24 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative group">
+            <label htmlFor="email-input" className="sr-only">
+              Wohnpro E-Mail Adresse
+            </label>
             <input
+              id="email-input"
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
               placeholder="Wohnpro E-Mail Adresse"
+              aria-invalid={!!error}
+              aria-describedby={error ? "email-error" : undefined}
               className={`w-full bg-gray-50 border ${error ? 'border-red-200' : 'border-gray-100'} rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all text-lg placeholder:text-gray-300`}
             />
-            {error && <p className="mt-2 text-sm text-red-500 text-left px-2">{error}</p>}
+            {error && (
+              <p id="email-error" role="alert" className="mt-2 text-sm text-red-500 text-left px-2">
+                {error}
+              </p>
+            )}
           </div>
 
           <button
