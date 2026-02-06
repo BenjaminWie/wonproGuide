@@ -1,27 +1,37 @@
 
-import React, { useState } from 'react';
-import { User } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface LoginViewProps {
   onLogin: (email: string) => void;
-  error?: string;
+  error?: { message: string } | null;
 }
 
 const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) => {
   const [email, setEmail] = useState('');
-  const [error, setError] = useState(externalError || '');
+  const [localError, setLocalError] = useState('');
+  const prevExternalErrorRef = useRef<{ message: string } | null | undefined>(externalError);
+
+  // Sync external error to local state using tracker pattern
+  useEffect(() => {
+    if (externalError && externalError !== prevExternalErrorRef.current) {
+      setLocalError(externalError.message);
+    }
+    prevExternalErrorRef.current = externalError;
+  }, [externalError]);
+
+  const error = localError;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
+      setLocalError('Bitte gib deine Wohnpro E-Mail Adresse ein.');
       return;
     }
     onLogin(email);
   };
 
   return (
-    <div className="fixed inset-0 bg-white flex items-center justify-center p-6 animate-in fade-in duration-700">
+    <div className="fixed inset-0 bg-white flex items-center justify-center p-6 animate-in fade-in duration-700" role="main">
       <div className="w-full max-w-sm text-center">
         <div className="mb-12">
           <div className="w-16 h-16 bg-black rounded-3xl mx-auto flex items-center justify-center mb-6 shadow-xl shadow-black/10">
@@ -35,15 +45,25 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, error: externalError }) 
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative group">
+          <div className="relative group text-left">
+            <label htmlFor="email-input" className="sr-only">
+              Wohnpro E-Mail Adresse
+            </label>
             <input
+              id="email-input"
               type="email"
               value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(''); }}
+              onChange={(e) => { setEmail(e.target.value); setLocalError(''); }}
               placeholder="Wohnpro E-Mail Adresse"
+              aria-invalid={!!error}
+              aria-describedby={error ? "login-error" : undefined}
               className={`w-full bg-gray-50 border ${error ? 'border-red-200' : 'border-gray-100'} rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-black/5 transition-all text-lg placeholder:text-gray-300`}
             />
-            {error && <p className="mt-2 text-sm text-red-500 text-left px-2">{error}</p>}
+            {error && (
+              <p id="login-error" role="alert" className="mt-2 text-sm text-red-500 px-2 animate-in fade-in slide-in-from-top-1 duration-300">
+                {error}
+              </p>
+            )}
           </div>
 
           <button

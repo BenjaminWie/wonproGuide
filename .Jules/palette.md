@@ -1,0 +1,3 @@
+## 2025-05-22 - [Robust Error Synchronization in Login]
+**Learning:** When syncing external error props to local state (e.g., in a LoginView), a simple string comparison in `useEffect` fails if the same error is triggered twice after being cleared locally. Using a 'derived state' pattern with a reference tracker or passing errors as unique objects from the parent ensures that the UI can reliably re-trigger error states.
+**Action:** Use an object-based error state in the parent (e.g., `{ message: string } | null`) to ensure new references on every error event, and use `useRef` as a tracker in the child component to detect when a new error object has arrived.
