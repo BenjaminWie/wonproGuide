@@ -43,6 +43,7 @@ const App: React.FC = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState<{ message: string } | null>(null);
   const [isFaqGenerating, setIsFaqGenerating] = useState(false);
   const [generatingStatus, setGeneratingStatus] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -100,8 +101,11 @@ const App: React.FC = () => {
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
     if (user) {
       setCurrentUser(user);
+      setLoginError(null);
     } else {
-      alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
+      // Using an object to ensure a new reference even if the message is the same,
+      // which triggers a re-render and allows LoginView to re-show the error.
+      setLoginError({ message: "Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden." });
     }
   };
 
@@ -256,7 +260,7 @@ const App: React.FC = () => {
             Synchronisiere mit Nextcloud...
           </div>
         )}
-        <LoginView onLogin={handleLogin} />
+        <LoginView onLogin={handleLogin} error={loginError} />
       </>
     );
   }
