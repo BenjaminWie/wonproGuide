@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { ChatSession, View } from '../types';
-import { ChatIcon, DocIcon, SettingsIcon, ClockIcon, InfoIcon, CloseIcon } from './Icons';
+import { ChatIcon, DocIcon, SettingsIcon, ClockIcon, InfoIcon, CloseIcon, CalendarIcon } from './Icons';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -53,6 +53,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sessions, currentVie
             >
               <DocIcon className="w-5 h-5" />
               <span>Wohnpro Dokumente</span>
+            </button>
+            <button 
+              onClick={() => { setView('timeline'); onClose(); }}
+              className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all ${currentView === 'timeline' ? 'bg-gray-50 text-black font-medium' : 'text-gray-500 hover:bg-gray-50 hover:text-black'}`}
+            >
+              <CalendarIcon className="w-5 h-5" />
+              <span>Zeitplan & Projekte</span>
             </button>
           </div>
 

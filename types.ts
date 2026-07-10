@@ -6,9 +6,10 @@ export enum Role {
 
 export type UserStatus = 'aktiv' | 'eingeladen' | 'deaktiviert';
 
+export type Category = string;
+
 /**
  * Represents a registered user or a pending invitation.
- * Database Mapping: Table `users`
  */
 export interface User {
   id: string; // UUID
@@ -16,61 +17,51 @@ export interface User {
   role: Role;
   status: UserStatus;
   invitedAt: string; // ISO Date string
-  inviteEmailContent?: string; // AI-generated content stored for preview/history
+  inviteEmailContent?: string;
 }
 
 /**
  * Represents a knowledge source. 
- * NOTE: 'content' stores the raw text extracted from PDF/DOCX.
- * Database Mapping: Table `documents`
  */
 export interface Document {
   id: string; // UUID
   name: string;
-  category: 'Recht & Struktur' | 'Selbstverständnis & Vision' | 'Teilnahme & Mitwirkung' | 'Entscheidungen & Prozesse' | 'Regeln & Hausordnung';
+  category: Category;
   uploadDate: string;
-  content: string; // TEXT column in DB - used for RAG context window
+  content: string;
   status: 'aktiv' | 'archiviert';
-  fileUrl?: string; // Optional URL to original file storage (S3/GCS)
-  etag?: string; // WebDAV ETag for sync optimization
+  fileUrl?: string;
+  etag?: string;
 }
 
 /**
  * Defines a target audience for FAQ generation.
- * This instructs the AI on the tone, complexity, and focus of questions.
- * Database Mapping: Table `personas`
  */
 export interface Persona {
   id: string; // UUID
-  name: string; // e.g. "The Critic", "The Newcomer"
-  description: string; // The "Meta-Dynamic" prompt instruction for the AI
-  role: 'beginner' | 'expert'; // UI hint for icon/color coding
+  name: string;
+  description: string;
+  role: 'beginner' | 'expert';
 }
 
 /**
  * AI-generated FAQ entries linked to specific documents and personas.
- * Database Mapping: Table `faqs`
  */
 export interface FAQItem {
   id: string; // UUID
   question: string;
   answer: string;
-  category: string;
-  sourceDocId: string; // Foreign Key to Document
-  sourceDocName: string; // Denormalized name for display
-  personaId: string; // Foreign Key to Persona
-  feedback?: 'like' | 'dislike'; // User feedback for pattern recognition
-  userComment?: string; // specific comments for refining the prompt
+  category: Category;
+  sourceDocId: string;
+  sourceDocName: string;
+  personaId: string;
+  feedback?: 'like' | 'dislike';
+  userComment?: string;
 }
 
-/**
- * Represents a citation within a chat response.
- * JSON Structure stored within Message content if using a relational DB, 
- * or as a nested object in NoSQL.
- */
 export interface Citation {
-  source: string; // Document Name
-  text: string; // The specific snippet quoted
+  source: string;
+  text: string;
   section?: string;
   documentId?: string;
 }
@@ -81,15 +72,25 @@ export interface Message {
   citations?: Citation[];
 }
 
-/**
- * Represents a conversation history.
- * Database Mapping: Table `chat_sessions`
- */
 export interface ChatSession {
   id: string;
   title: string;
-  messages: Message[]; // Stored as JSONB in SQL or Array in NoSQL
+  messages: Message[];
   createdAt: string;
 }
 
-export type View = 'chat' | 'voice' | 'admin-docs' | 'admin-users' | 'admin-personas' | 'docs-view' | 'doc-detail' | 'faq';
+/**
+ * Represents a project milestone for the timeline.
+ */
+export interface Milestone {
+  id: string;
+  title: string;
+  startDate: string; // ISO Date YYYY-MM-DD
+  endDate: string;   // ISO Date YYYY-MM-DD
+  owner: string;     // Name or Initials
+  progress: number;  // 0-100
+  description: string;
+  status: 'planned' | 'active' | 'done' | 'delayed';
+}
+
+export type View = 'chat' | 'voice' | 'admin-docs' | 'admin-users' | 'admin-personas' | 'admin-timeline' | 'admin-prompts' | 'docs-view' | 'doc-detail' | 'faq' | 'timeline';

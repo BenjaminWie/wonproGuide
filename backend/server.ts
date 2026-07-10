@@ -1,7 +1,7 @@
 import express from 'express';
 import { createClient, AuthType } from 'webdav';
 import mammoth from 'mammoth';
-import * as pdf from 'pdf-parse';
+import pdf from 'pdf-parse';
 
 // --- Configuration ---
 const PORT = process.env.PORT || 3001;
@@ -13,7 +13,8 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
 if (!NC_URL || !NC_USER || !NC_PASS) {
   console.error("Missing NEXTCLOUD configuration in environment variables.");
-  process.exit(1);
+  // Fix: Cast process to any to access exit if types are not properly loaded
+  (process as any).exit(1);
 }
 
 // --- WebDAV Client ---
@@ -27,16 +28,18 @@ const client = createClient(
 );
 
 const app = express();
-app.use(express.json() as express.RequestHandler);
+app.use(express.json());
 
 // --- Helper Functions ---
 
-const convertPdfToText = async (buffer: Buffer): Promise<string> => {
+// Fix: Use any for buffer parameter to resolve "Cannot find name 'Buffer'"
+const convertPdfToText = async (buffer: any): Promise<string> => {
   const data = await (pdf as any)(buffer);
   return data.text;
 };
 
-const convertDocxToText = async (buffer: Buffer): Promise<string> => {
+// Fix: Use any for buffer parameter to resolve "Cannot find name 'Buffer'"
+const convertDocxToText = async (buffer: any): Promise<string> => {
   const result = await mammoth.extractRawText({ buffer });
   return result.value;
 };
@@ -46,7 +49,8 @@ const processFile = async (filePath: string, fileName: string) => {
 
   try {
     // 1. Download
-    const fileContents = await client.getFileContents(filePath, { format: 'binary' }) as Buffer;
+    // Fix: Cast result to any to resolve "Cannot find name 'Buffer'"
+    const fileContents = await client.getFileContents(filePath, { format: 'binary' }) as any;
 
     // 2. Convert
     let text = '';

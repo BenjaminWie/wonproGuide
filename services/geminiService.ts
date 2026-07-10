@@ -1,21 +1,107 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SYSTEM_INSTRUCTION } from "../constants";
+import { SYSTEM_INSTRUCTION, VOICE_SYSTEM_INSTRUCTION, FAQ_SYSTEM_INSTRUCTION } from "../constants";
 import { Document, Citation, Role, FAQItem, Persona } from "../types";
 
 export class GeminiService {
-  private getAI() {
-    // Check if Vertex AI specific variables are set
+  private textSystemPrompt: string = SYSTEM_INSTRUCTION;
+  private voiceSystemPrompt: string = VOICE_SYSTEM_INSTRUCTION;
+  private faqSystemPrompt: string = FAQ_SYSTEM_INSTRUCTION;
+
+  public setSystemPrompts(textPrompt: string, voicePrompt: string, faqPrompt: string) {
+    this.textSystemPrompt = textPrompt;
+    this.voiceSystemPrompt = voicePrompt;
+    this.faqSystemPrompt = faqPrompt;
+  }
+
+  public getSystemPrompts() {
+    return {
+      textPrompt: this.textSystemPrompt,
+      voicePrompt: this.voiceSystemPrompt,
+      faqPrompt: this.faqSystemPrompt
+    };
+  }
+
+  public getAI(isPro: boolean = false) {
+    let apiKey = '';
+    
+    try {
+      if (typeof import.meta !== 'undefined' && import.meta.env) {
+        apiKey = apiKey || import.meta.env.VITE_GEMINI_PRO_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+      }
+    } catch (e) {}
+
+    try {
+      // @ts-ignore
+      apiKey = apiKey || process.env.GEMINI_PRO_API_KEY;
+    } catch (e) {}
+
+    try {
+      // @ts-ignore
+      apiKey = apiKey || process.env.GEMINI_API_KEY;
+    } catch (e) {}
+
+    try {
+      // @ts-ignore
+      apiKey = apiKey || process.env.API_KEY;
+    } catch (e) {}
+    
+    if (apiKey) {
+      return new GoogleGenAI({ apiKey });
+    }
+
+    // Fallback to Vertex AI Configuration (Hosting project)
     if (process.env.GCP_PROJECT && process.env.GCP_LOCATION) {
       return new GoogleGenAI({
-        vertexai: true,
-        project: process.env.GCP_PROJECT,
-        location: process.env.GCP_LOCATION,
+        vertexai: {
+          project: process.env.GCP_PROJECT,
+          location: process.env.GCP_LOCATION,
+        }
       });
     }
-    
-    // Fallback to Google AI Studio (API Key)
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    throw new Error("No valid Gemini API configuration found. Please set GEMINI_PRO_API_KEY or GEMINI_API_KEY.");
+  }
+
+  /**
+   * Analyzes a document and assigns it to an existing category or creates a new one.
+   */
+  async detectCategory(docContent: string, existingCategories: string[]): Promise<string> {
+    const ai = this.getAI();
+    try {
+      console.log(`[Gemini] Detecting category for document: ${docContent.substring(0, 50)}...`);
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Analysiere den Inhalt des folgenden Dokuments und ordne es einer Kategorie zu.
+        
+        EXISTIERENDE KATEGORIEN:
+        ${JSON.stringify(existingCategories)}
+        
+        REGELN:
+        1. Wenn das Dokument gut in eine existierende Kategorie passt, wähle diese.
+        2. Wenn es NICHT passt, erstelle einen NEUEN, kurzen Kategorienamen (max. 2 Wörter, z.B. "Gemeinschaft", "Rechtliches", "Garten").
+        3. Sei präzise und vermeide generische Begriffe wie "Sonstiges" wenn möglich.
+        
+        DOKUMENT AUSZUG:
+        ${docContent.substring(0, 5000)}`,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              category: { type: Type.STRING }
+            },
+            required: ["category"]
+          }
+        }
+      });
+      console.log(`[Gemini] Category detection raw response:`, response.text);
+      const data = JSON.parse(response.text || '{}');
+      return data.category || "Allgemein";
+    } catch (e) {
+      console.error("[Gemini] Category detection failed", e);
+      return "Allgemein";
+    }
   }
 
   async askQuestion(
@@ -23,18 +109,18 @@ export class GeminiService {
     documents: Document[], 
     history: { role: 'user' | 'model'; text: string }[]
   ): Promise<{ text: string, citations: Citation[] }> {
-    const ai = this.getAI();
-    const context = documents.map(d => `[DOC: ${d.name}] ${d.content}`).join('\n\n');
+    const ai = this.getAI(true);
+    const context = documents.map(d => `[DOC: ${d.name} (${d.category})] ${d.content}`).join('\n\n');
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.1-pro-preview',
         contents: [
           ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
           { role: 'user', parts: [{ text: `Wissensbasis:\n${context}\n\nFrage: ${question}` }] }
         ],
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: this.textSystemPrompt,
           temperature: 0.1,
           responseMimeType: "application/json",
           responseSchema: {
@@ -69,12 +155,11 @@ export class GeminiService {
     }
   }
 
-  async generateFAQs(doc: Document, persona: Persona): Promise<Partial<FAQItem>[]> {
-    const ai = this.getAI();
+  async generateFAQs(doc: Document, persona: Persona, availableCategories: string[]): Promise<Partial<FAQItem>[]> {
+    const ai = this.getAI(true);
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Analysiere das folgende Dokument des Wohnprojekts.
+      console.log(`[Gemini] Starting FAQ generation for doc: ${doc.name}, persona: ${persona.name}`);
+      const prompt = `Analysiere das folgende Dokument des Wohnprojekts.
         
         DEINE PERSONA / ZIELGRUPPE:
         Name: ${persona.name}
@@ -82,14 +167,23 @@ export class GeminiService {
         
         AUFGABE:
         Extrahiere basierend auf deiner Persona-Beschreibung 2 bis 4 Fragen, die genau DIESE Person an das Dokument stellen würde.
-        Formuliere die Antworten im Stil der Persona (einfach/emotional ODER komplex/fachlich).
+        
+        KATEGORISIERUNG:
+        Ordne jeder Frage eine Kategorie zu. 
+        Bevorzuge diese Liste: ${JSON.stringify(availableCategories)}.
+        Wenn eine Frage thematisch eindeutig woanders hingehört, nutze die Dokumentenkategorie: "${doc.category}".
         
         DOKUMENT:
         Name: ${doc.name}
-        Kategorie: ${doc.category}
-        Inhalt: ${doc.content.substring(0, 15000)}`,
+        Inhalt: ${doc.content.substring(0, 15000)}`;
+        
+      console.log(`[Gemini] FAQ Prompt length: ${prompt.length} characters`);
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview',
+        contents: prompt,
         config: {
-          systemInstruction: `Du bist ein spezialisierter FAQ-Generator. Du ignorierst allgemeine Fragen und konzentrierst dich NUR auf das, was die definierte Persona ("${persona.name}") wirklich wissen will.`,
+          systemInstruction: this.faqSystemPrompt,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
@@ -105,10 +199,23 @@ export class GeminiService {
           }
         }
       });
-      return JSON.parse(response.text || '[]');
+      
+      console.log(`[Gemini] FAQ raw response for ${persona.name}:`, response.text);
+      
+      if (!response.text) {
+         throw new Error("Empty response from Gemini API");
+      }
+      
+      const parsed = JSON.parse(response.text);
+      if (!Array.isArray(parsed)) {
+         throw new Error("Response is not a JSON array");
+      }
+      
+      console.log(`[Gemini] Successfully generated ${parsed.length} FAQs for ${persona.name}`);
+      return parsed;
     } catch (e) {
-      console.error("FAQ generation failed", e);
-      return [];
+      console.error(`[Gemini] FAQ Generation Error for ${persona.name}:`, e);
+      throw e; // Rethrow to be caught by the caller for alerting
     }
   }
 
@@ -118,21 +225,19 @@ export class GeminiService {
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Erstelle eine professionelle Einladungs-E-Mail für einen neuen Bewohner (${email}) mit der Rolle ${role}. 
-      Beziehe dich kurz auf die Hausordnung oder das Gemeinschaftsgefühl des Wohnprojekts.
-      Kontext: ${houseContext}`,
+      contents: `Erstelle eine Einladung für Bewohner ${email} mit Rolle ${role}. Kontext: ${houseContext}`,
       config: {
-        systemInstruction: "Du bist ein professioneller Verwalter eines modernen Wohnpro. Schreibstil: Herzlich, klar, einladend. Formatiere als Plain Text E-Mail. Bezeichne das Tool als Wohnpro Guide.",
+        systemInstruction: "Du bist ein professioneller Verwalter eines modernen Wohnpro.",
       }
     });
-    return response.text || "Willkommen im Wohnpro! Dein Wohnpro Guide ist für dich da.";
+    return response.text || "Willkommen im Wohnpro!";
   }
 
   async verifyUser(email: string): Promise<{ success: boolean; reason: string }> {
     const ai = this.getAI();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Prüfe die E-Mail "${email}" auf Plausibilität und Sicherheit. Ist sie formal korrekt?`,
+      contents: `Prüfe die E-Mail "${email}"`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -145,7 +250,7 @@ export class GeminiService {
         }
       }
     });
-    return JSON.parse(response.text || '{"success":true, "reason": "Verifiziert durch Wohnpro Guide"}');
+    return JSON.parse(response.text || '{"success":true, "reason": "Verifiziert"}');
   }
 }
 

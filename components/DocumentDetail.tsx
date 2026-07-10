@@ -18,7 +18,8 @@ const DocumentDetail: React.FC<DocumentDetailProps> = ({ document, onClose, high
        // Priority 1: Highlight Section
        if (highlightSection) {
           // Attempt to find an element containing the section text that looks like a header or significant block
-          const elements = Array.from(contentRef.current.querySelectorAll('p, div, span, mark'));
+          // Fix: Cast to HTMLElement[] to ensure textContent and scrollIntoView are correctly typed
+          const elements = Array.from(contentRef.current.querySelectorAll('p, div, span, mark')) as HTMLElement[];
           const found = elements.find(el => el.textContent?.toLowerCase().includes(highlightSection.toLowerCase()));
           if (found) {
             found.scrollIntoView({ behavior: 'smooth', block: 'center' });

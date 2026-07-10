@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import { CloseIcon, DocIcon, ArrowRightIcon, PlusIcon, InfoIcon } from './Icons';
 import { Document, Message } from '../types';
-import { VOICE_SYSTEM_INSTRUCTION } from '../constants';
+import { gemini } from '../services/geminiService';
 
 interface VoiceModeProps {
   onClose: (transcript?: Message[]) => void;
@@ -96,17 +96,17 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
           outputAnalyser
         };
 
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = gemini.getAI();
         const contextString = documents.map(d => `[DOKUMENT ${d.name}]: ${d.content}`).join('\n');
 
         const sessionPromise = ai.live.connect({
-          model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+          model: 'gemini-3.1-flash-live-preview',
           config: {
             responseModalities: [Modality.AUDIO],
             speechConfig: {
               voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } },
             },
-            systemInstruction: `${VOICE_SYSTEM_INSTRUCTION}\n\nWissen aus Dokumenten:\n${contextString}`,
+            systemInstruction: `${gemini.getSystemPrompts().voicePrompt}\n\nWissen aus Dokumenten:\n${contextString}`,
             outputAudioTranscription: {},
             inputAudioTranscription: {},
           },
@@ -130,7 +130,7 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
                 };
                 
                 sessionPromise.then(session => {
-                  session.sendRealtimeInput({ media: pcmBlob });
+                  session.sendRealtimeInput({ audio: pcmBlob });
                 });
               };
 
@@ -140,6 +140,7 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
             },
             onmessage: async (message: LiveServerMessage) => {
               if (!isMounted) return;
+              console.log("LiveServerMessage:", JSON.stringify(message, null, 2));
 
               if (message.serverContent?.inputTranscription) {
                 if (currentUserTurnText.current === '') {
@@ -147,40 +148,46 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
                    setShowCitationList(false);
                    setLastTranscriptFragment('');
                 }
-                currentUserTurnText.current += message.serverContent.inputTranscription.text;
+                currentUserTurnText.current += message.serverContent.inputTranscription.text || '';
                 setLastTranscriptFragment(currentUserTurnText.current);
               }
 
               if (message.serverContent?.outputTranscription) {
-                const text = message.serverContent.outputTranscription.text;
+                const text = message.serverContent.outputTranscription.text || '';
                 currentModelTurnText.current += text;
                 setLastTranscriptFragment(currentModelTurnText.current);
-
-                // Regex to find [Quelle: Document Name] in the streaming text
-                const matches = [...currentModelTurnText.current.matchAll(/\[Quelle:\s*([^\]]+)\]/gi)];
-                
-                if (matches.length > 0) {
-                  matches.forEach(match => {
-                     const sourceName = match[1].trim().toLowerCase();
-                     // Robust matching against document names
-                     const doc = documents.find(d => 
-                       d.name.toLowerCase().includes(sourceName) || 
-                       sourceName.includes(d.name.toLowerCase().replace(/\.(pdf|docx)$/i, ''))
-                     );
-                     
-                     if (doc) {
-                        const fullTextBefore = currentModelTurnText.current.substring(0, match.index);
-                        const sentences = fullTextBefore.split(/[.!?]/);
-                        const relevantSentence = sentences[sentences.length - 1]?.trim() || "Information gefunden";
-
-                        setActiveCitations(prev => {
-                          // Prevent duplicate citations for the same document in a single turn
-                          if (prev.some(p => p.doc.id === doc.id)) return prev;
-                          return [...prev, { doc, snippet: relevantSentence, timestamp: Date.now() }];
-                        });
-                     }
-                  });
+              } else if (message.serverContent?.modelTurn?.parts) {
+                const textParts = message.serverContent.modelTurn.parts.filter(p => p.text).map(p => p.text).join('');
+                if (textParts) {
+                  currentModelTurnText.current += textParts;
+                  setLastTranscriptFragment(currentModelTurnText.current);
                 }
+              }
+
+              // Regex to find [Quelle: Document Name] in the streaming text
+              const matches = [...currentModelTurnText.current.matchAll(/\[Quelle:\s*([^\]]+)\]/gi)];
+                
+              if (matches.length > 0) {
+                matches.forEach(match => {
+                   const sourceName = match[1].trim().toLowerCase();
+                   // Robust matching against document names
+                   const doc = documents.find(d => 
+                     d.name.toLowerCase().includes(sourceName) || 
+                     sourceName.includes(d.name.toLowerCase().replace(/\.(pdf|docx)$/i, ''))
+                   );
+                   
+                   if (doc) {
+                      const fullTextBefore = currentModelTurnText.current.substring(0, match.index);
+                      const sentences = fullTextBefore.split(/[.!?]/);
+                      const relevantSentence = sentences[sentences.length - 1]?.trim() || "Information gefunden";
+
+                      setActiveCitations(prev => {
+                        // Prevent duplicate citations for the same document in a single turn
+                        if (prev.some(p => p.doc.id === doc.id)) return prev;
+                        return [...prev, { doc, snippet: relevantSentence, timestamp: Date.now() }];
+                      });
+                   }
+                });
               }
 
               if (message.serverContent?.turnComplete) {
@@ -198,19 +205,24 @@ const VoiceMode: React.FC<VoiceModeProps> = ({ onClose, onViewDocument, document
                 // Keep the last text fragment visible for a moment
               }
 
-              const audioData = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-              if (audioData) {
-                const buffer = await decodeAudioData(decodeBase64(audioData), outputCtx, 24000);
-                const source = outputCtx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(outputAnalyser);
-                outputAnalyser.connect(outputCtx.destination);
-                
-                nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
-                source.start(nextStartTimeRef.current);
-                nextStartTimeRef.current += buffer.duration;
-                sourcesRef.current.add(source);
-                source.onended = () => sourcesRef.current.delete(source);
+              const parts = message.serverContent?.modelTurn?.parts;
+              if (parts) {
+                for (const part of parts) {
+                  const audioData = part.inlineData?.data;
+                  if (audioData) {
+                    const buffer = await decodeAudioData(decodeBase64(audioData), outputCtx, 24000);
+                    const source = outputCtx.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(outputAnalyser);
+                    outputAnalyser.connect(outputCtx.destination);
+                    
+                    nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
+                    source.start(nextStartTimeRef.current);
+                    nextStartTimeRef.current += buffer.duration;
+                    sourcesRef.current.add(source);
+                    source.onended = () => sourcesRef.current.delete(source);
+                  }
+                }
               }
 
               if (message.serverContent?.interrupted) {

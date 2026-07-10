@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
-import { View, ChatSession, Document, User, Message, Role, UserStatus, FAQItem, Persona } from './types';
-import { INITIAL_DOCUMENTS, INITIAL_USERS, INITIAL_PERSONAS } from './constants';
+import React, { useState, useEffect, useCallback } from 'react';
+import { get, set } from 'idb-keyval';
+import { View, ChatSession, Document, User, Message, Role, UserStatus, FAQItem, Persona, Milestone } from './types';
+import { INITIAL_DOCUMENTS, INITIAL_USERS, INITIAL_PERSONAS, INITIAL_MILESTONES, INITIAL_CATEGORIES } from './constants';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
@@ -10,13 +11,17 @@ import AdminPanel from './components/AdminPanel';
 import DocumentDetail from './components/DocumentDetail';
 import LandingPage from './components/LandingPage';
 import FAQView from './components/FAQView';
+import TimelineView from './components/TimelineView';
+import { InstallPWA } from './components/InstallPWA';
 import { gemini } from './services/geminiService';
-import { DocIcon } from './components/Icons';
-import { isNextcloudConfigured, fetchNextcloudDocuments, fetchNextcloudUsers } from './services/nextcloudService';
+import { isNextcloudConfigured, fetchNextcloudDocuments, fetchNextcloudUsers, fetchNextcloudTimeline } from './services/nextcloudService';
 
 const STORAGE_KEY = 'wohnprojekt_docs_cache';
 const FAQ_STORAGE_KEY = 'wohnprojekt_faq_cache';
 const PERSONA_STORAGE_KEY = 'wohnprojekt_persona_cache';
+const SESSIONS_STORAGE_KEY = 'wohnprojekt_chat_sessions';
+const MILESTONE_STORAGE_KEY = 'wohnprojekt_milestone_cache';
+const CATEGORIES_STORAGE_KEY = 'wohnprojekt_categories_cache';
 
 const App: React.FC = () => {
   const [showLanding, setShowLanding] = useState(true);
@@ -24,10 +29,37 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  const [documents, setDocuments] = useState<Document[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : INITIAL_DOCUMENTS;
+  const [documents, setDocuments] = useState<Document[]>(INITIAL_DOCUMENTS);
+  const [documentsLoaded, setDocumentsLoaded] = useState(false);
+
+  useEffect(() => {
+    get(STORAGE_KEY).then((saved) => {
+      if (saved) {
+        setDocuments(saved);
+      }
+      setDocumentsLoaded(true);
+    });
+  }, []);
+
+  const [categories, setCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
   });
+
+  // Ensure initial categories are always present
+  useEffect(() => {
+    setCategories(prev => {
+      const newCats = [...prev];
+      let changed = false;
+      INITIAL_CATEGORIES.forEach(cat => {
+        if (!newCats.includes(cat)) {
+          newCats.push(cat);
+          changed = true;
+        }
+      });
+      return changed ? newCats : prev;
+    });
+  }, []);
 
   const [faqs, setFaqs] = useState<FAQItem[]>(() => {
     const saved = localStorage.getItem(FAQ_STORAGE_KEY);
@@ -38,54 +70,57 @@ const App: React.FC = () => {
     const saved = localStorage.getItem(PERSONA_STORAGE_KEY);
     return saved ? JSON.parse(saved) : INITIAL_PERSONAS;
   });
-  
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
+  const [milestones, setMilestones] = useState<Milestone[]>(() => {
+      const saved = localStorage.getItem(MILESTONE_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : INITIAL_MILESTONES;
+  });
+
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    const saved = localStorage.getItem(SESSIONS_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [systemPrompts, setSystemPrompts] = useState<{ textPrompt: string, voicePrompt: string, faqPrompt: string }>(() => {
+    const saved = localStorage.getItem('wohnpro_system_prompts');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const defaultPrompts = gemini.getSystemPrompts();
+      const textPrompt = parsed.textPrompt || defaultPrompts.textPrompt;
+      const voicePrompt = parsed.voicePrompt || defaultPrompts.voicePrompt;
+      const faqPrompt = parsed.faqPrompt || defaultPrompts.faqPrompt;
+      gemini.setSystemPrompts(textPrompt, voicePrompt, faqPrompt);
+      return { textPrompt, voicePrompt, faqPrompt };
+    }
+    return gemini.getSystemPrompts();
+  });
+
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [modalState, setModalState] = useState<{ isOpen: boolean; title: string; message: string; type: 'alert' | 'confirm'; onConfirm?: () => void }>({ isOpen: false, title: '', message: '', type: 'alert' });
   const [isLoading, setIsLoading] = useState(false);
-  const [isFaqGenerating, setIsFaqGenerating] = useState(false);
+  const [isGeneratingFAQs, setIsGeneratingFAQs] = useState(false);
   const [generatingStatus, setGeneratingStatus] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [activeDoc, setActiveDoc] = useState<{ doc: Document, highlightText?: string, highlightSection?: string } | null>(null);
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
 
-  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
-  const [highlightText, setHighlightText] = useState<string>('');
-  const [highlightSection, setHighlightSection] = useState<string>('');
+  const showAlert = (title: string, message: string) => {
+    setModalState({ isOpen: true, title, message, type: 'alert' });
+  };
 
-  // Initial Sync with Nextcloud (Runs once on mount)
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setModalState({ isOpen: true, title, message, type: 'confirm', onConfirm });
+  };
+
+  // Persistence
   useEffect(() => {
-    const syncWithNextcloud = async () => {
-      if (isNextcloudConfigured()) {
-        console.log("Starting Nextcloud Sync...");
-        setIsSyncing(true);
-        try {
-          // 1. Fetch Users
-          const ncUsers = await fetchNextcloudUsers();
-          if (ncUsers.length > 0) {
-            setUsers(ncUsers);
-          }
-
-          // 2. Fetch Documents (Smart Sync using ETags)
-          // We pass current documents for ETag optimization.
-          // Note: fetchNextcloudDocuments returns 'currentDocs' if network fails,
-          // so it is safe to always setDocuments with the result.
-          const ncDocs = await fetchNextcloudDocuments(documents);
-          setDocuments(ncDocs);
-
-        } catch (e) {
-          console.error("Sync failed", e);
-        } finally {
-          setIsSyncing(false);
-        }
-      }
-    };
-
-    syncWithNextcloud();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array = run once on mount
+    if (documentsLoaded) {
+      set(STORAGE_KEY, documents);
+    }
+  }, [documents, documentsLoaded]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
-  }, [documents]);
+    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
+  }, [categories]);
 
   useEffect(() => {
     localStorage.setItem(FAQ_STORAGE_KEY, JSON.stringify(faqs));
@@ -95,153 +130,252 @@ const App: React.FC = () => {
     localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(personas));
   }, [personas]);
 
+  useEffect(() => {
+      localStorage.setItem(MILESTONE_STORAGE_KEY, JSON.stringify(milestones));
+  }, [milestones]);
+
+  useEffect(() => {
+    localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+  }, [sessions]);
+
+  useEffect(() => {
+    localStorage.setItem('wohnpro_system_prompts', JSON.stringify(systemPrompts));
+    gemini.setSystemPrompts(systemPrompts.textPrompt, systemPrompts.voicePrompt, systemPrompts.faqPrompt);
+  }, [systemPrompts]);
+
+  // Nextcloud Sync
+  useEffect(() => {
+    const syncNextcloud = async () => {
+      if (isNextcloudConfigured()) {
+        const ncDocs = await fetchNextcloudDocuments(documents);
+        
+        // Check for new docs that need categorization logic (optional enhancement for future)
+        // For now, we assume Nextcloud docs get a default or are categorized manually later
+        // or we could run the AI categorization here if we wanted fully automated background sync.
+        
+        if (ncDocs.length > 0) setDocuments(ncDocs);
+        
+        const ncUsers = await fetchNextcloudUsers();
+        if (ncUsers.length > 0) setUsers(ncUsers);
+
+        const ncTimeline = await fetchNextcloudTimeline();
+        if (ncTimeline.length > 0) setMilestones(ncTimeline);
+      }
+    };
+    syncNextcloud();
+    const interval = setInterval(syncNextcloud, 60000); // Sync every minute
+    return () => clearInterval(interval);
+  }, []);
+
   const handleLogin = (email: string) => {
-    // If we have users loaded (from NC or Init), check them
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.status === 'aktiv');
-    if (user) {
-      setCurrentUser(user);
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (user && (user.status === 'aktiv' || user.status === 'eingeladen')) {
+      setCurrentUser({ ...user, status: 'aktiv' });
     } else {
-      alert("Zugang verweigert. Nur verifizierte Wohnpro-Bewohner können sich im Wohnpro Guide anmelden.");
+      showAlert("Fehler", "Zugriff verweigert. Bitte wende dich an die Wohnprojekt-Verwaltung.");
     }
   };
 
-  const sendMessage = async (text: string) => {
-    let sessionId = currentSessionId;
+  const getActiveMessages = () => {
+    if (!activeSessionId) return [];
+    return sessions.find(s => s.id === activeSessionId)?.messages || [];
+  };
+
+  const handleAddDocument = async (doc: Document) => {
+    // 1. Dynamic Category Detection
+    let detectedCategory = "Allgemein";
+    try {
+      detectedCategory = await gemini.detectCategory(doc.content, categories);
+    } catch (e) {
+      console.warn("Could not detect category, using fallback.");
+    }
+
+    const docWithCategory = { ...doc, category: detectedCategory };
+    setDocuments(prev => [...prev, docWithCategory]);
+
+    // 2. Update Category List if new
+    let updatedCategories = [...categories];
+    if (!categories.includes(detectedCategory)) {
+       updatedCategories = [...categories, detectedCategory];
+       setCategories(updatedCategories);
+    }
+    
+    // 3. Generate FAQs using the dynamic categories
+    if (personas.length === 0) {
+      showAlert("Warnung", "Keine Zielgruppen (Personas) definiert. Es können keine FAQs generiert werden.");
+      return;
+    }
+
+    setIsGeneratingFAQs(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const persona of personas) {
+      try {
+        setGeneratingStatus(`Lerne für ${persona.name}...`);
+        const generated = await gemini.generateFAQs(docWithCategory, persona, updatedCategories);
+        
+        if (!generated || generated.length === 0) {
+           console.warn(`[FAQ Gen] No FAQs generated for persona: ${persona.name}`);
+           showAlert("Achtung", `Für die Zielgruppe "${persona.name}" konnten keine FAQs generiert werden. Bitte prüfe das Dokument.`);
+           failCount++;
+           continue;
+        }
+
+        const newFaqs: FAQItem[] = generated.map(g => ({
+          id: Math.random().toString(36).substr(2, 9),
+          question: g.question || '',
+          answer: g.answer || '',
+          category: g.category || detectedCategory,
+          sourceDocId: doc.id,
+          sourceDocName: doc.name,
+          personaId: persona.id,
+          feedback: undefined,
+          userComment: ''
+        }));
+        setFaqs(prev => [...prev, ...newFaqs]);
+        successCount++;
+      } catch (e) {
+        console.error(`Auto-FAQ Generation Error for ${persona.name}:`, e);
+        showAlert("Fehler", `Fehler bei der FAQ-Generierung für "${persona.name}": ${e instanceof Error ? e.message : 'Unbekannter Fehler'}`);
+        failCount++;
+      }
+    }
+    
+    setIsGeneratingFAQs(false);
+    setGeneratingStatus('');
+    
+    if (successCount > 0) {
+       showAlert("Erfolg", `FAQ-Generierung abgeschlossen! Erfolgreich für ${successCount} Zielgruppe(n).`);
+    } else if (failCount > 0) {
+       showAlert("Fehler", `FAQ-Generierung fehlgeschlagen. Bitte prüfe die Konsole für Details.`);
+    }
+  };
+
+  const handleSendMessage = async (text: string) => {
+    let currentId = activeSessionId;
     let currentSessions = [...sessions];
     
-    if (!sessionId) {
-      sessionId = Math.random().toString(36).substr(2, 9);
+    if (!currentId) {
+      currentId = Math.random().toString(36).substr(2, 9);
       const newSession: ChatSession = {
-        id: sessionId,
-        title: text.length > 30 ? text.substring(0, 30) + '...' : text,
+        id: currentId,
+        title: text.substring(0, 30) + '...',
         messages: [],
         createdAt: new Date().toISOString()
       };
       currentSessions = [newSession, ...currentSessions];
+      setActiveSessionId(currentId);
       setSessions(currentSessions);
-      setCurrentSessionId(sessionId);
     }
 
-    const updatedSessions = currentSessions.map(s => {
-      if (s.id === sessionId) {
-        return { ...s, messages: [...s.messages, { role: 'user' as const, text }] };
-      }
-      return s;
-    });
-    setSessions(updatedSessions);
+    const userMsg: Message = { role: 'user', text };
+    const sessionIndex = currentSessions.findIndex(s => s.id === currentId);
+    currentSessions[sessionIndex].messages.push(userMsg);
+    setSessions([...currentSessions]);
+    
     setIsLoading(true);
-
-    const history = updatedSessions.find(s => s.id === sessionId)?.messages.map(m => ({ 
-      role: m.role, 
-      text: m.text 
-    })) || [];
-
-    const response = await gemini.askQuestion(text, documents, history.slice(0, -1));
-    
-    setSessions(prev => prev.map(s => {
-      if (s.id === sessionId) {
-        return { 
-          ...s, 
-          messages: [...s.messages, { 
-            role: 'model' as const, 
-            text: response.text, 
-            citations: response.citations 
-          }] 
-        };
-      }
-      return s;
-    }));
-    setIsLoading(false);
-  };
-
-  const handleAddDoc = async (doc: Document) => {
-    setDocuments(prev => [...prev, doc]);
-    setIsFaqGenerating(true);
-    
     try {
-      // Loop through all personas and generate specific FAQs for each
-      for (const persona of personas) {
-        setGeneratingStatus(`Lerne für ${persona.name}...`);
-        const extractedFaqs = await gemini.generateFAQs(doc, persona);
-        
-        const newFaqItems: FAQItem[] = extractedFaqs.map(f => ({
-          id: Math.random().toString(36).substr(2, 9),
-          question: f.question || '',
-          answer: f.answer || '',
-          category: f.category || doc.category,
-          sourceDocId: doc.id,
-          sourceDocName: doc.name,
-          personaId: persona.id
-        }));
-        
-        setFaqs(prev => [...prev, ...newFaqItems]);
-      }
+      const history = currentSessions[sessionIndex].messages.map(m => ({ role: m.role, text: m.text }));
+      const response = await gemini.askQuestion(text, documents, history);
+      
+      const aiMsg: Message = { 
+        role: 'model', 
+        text: response.text, 
+        citations: response.citations 
+      };
+      
+      currentSessions[sessionIndex].messages.push(aiMsg);
+      setSessions([...currentSessions]);
     } catch (e) {
-      console.error("Failed to generate FAQs background", e);
+      console.error(e);
     } finally {
-      setIsFaqGenerating(false);
-      setGeneratingStatus('');
+      setIsLoading(false);
     }
   };
 
-  const handleInviteUser = (email: string, role: Role, content: string) => {
-    const newUser: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      email,
-      role,
-      status: 'eingeladen',
-      invitedAt: new Date().toISOString(),
-      inviteEmailContent: content
-    };
-    setUsers(prev => [...prev, newUser]);
-    
-    setTimeout(() => {
-      setUsers(prev => prev.map(u => u.id === newUser.id ? { ...u, status: 'aktiv' } : u));
-    }, 5000);
-  };
-
-  const handleViewDocument = (sourceName: string, textToHighlight?: string, sectionToHighlight?: string) => {
-    const doc = documents.find(d => d.name === sourceName);
-    if (doc) {
-      setSelectedDocId(doc.id);
-      setHighlightText(textToHighlight || '');
-      setHighlightSection(sectionToHighlight || '');
-      setCurrentView('doc-detail');
+  const handleRegenerateFAQs = async () => {
+    if (documents.length === 0) {
+      showAlert("Fehler", "Keine Dokumente vorhanden, aus denen FAQs generiert werden können.");
+      return;
     }
+
+    if (personas.length === 0) {
+      showAlert("Fehler", "Keine Zielgruppen (Personas) definiert. Es können keine FAQs generiert werden.");
+      return;
+    }
+
+    showConfirm("FAQs neu generieren?", "Möchtest du wirklich alle FAQs neu generieren? Dies kann einige Zeit dauern.", async () => {
+      setIsGeneratingFAQs(true);
+      setFaqs([]); // Clear existing FAQs
+
+      let successCount = 0;
+      let failCount = 0;
+
+      try {
+        for (const doc of documents) {
+          const docWithCategory = doc.category ? doc : { ...doc, category: "Allgemein" };
+          
+          for (const persona of personas) {
+            try {
+              setGeneratingStatus(`Lerne für ${persona.name} (Dokument: ${doc.name})...`);
+              const generated = await gemini.generateFAQs(docWithCategory, persona, categories);
+              
+              if (!generated || generated.length === 0) {
+                 console.warn(`[FAQ Gen] No FAQs generated for doc ${doc.name}, persona: ${persona.name}`);
+                 failCount++;
+                 continue;
+              }
+
+              const newFaqs: FAQItem[] = generated.map(g => ({
+                id: Math.random().toString(36).substr(2, 9),
+                question: g.question || '',
+                answer: g.answer || '',
+                category: g.category || docWithCategory.category || "Allgemein",
+                sourceDocId: doc.id,
+                sourceDocName: doc.name,
+                personaId: persona.id,
+                feedback: undefined,
+                userComment: ''
+              }));
+              setFaqs(prev => [...prev, ...newFaqs]);
+              successCount++;
+            } catch (e) {
+              console.error(`Error generating FAQs for doc ${doc.name} and persona ${persona.name}:`, e);
+              showAlert("Fehler", `Fehler bei Dokument "${doc.name}" für Zielgruppe "${persona.name}": ${e instanceof Error ? e.message : 'Unbekannter Fehler'}`);
+              failCount++;
+            }
+          }
+        }
+        
+        showAlert("Erfolg", `Regenerierung abgeschlossen! ${successCount} erfolgreiche Durchläufe, ${failCount} Fehler/Leermeldungen.`);
+      } catch (e) {
+        console.error("Global FAQ Generation Error:", e);
+        showAlert("Fehler", "Schwerwiegender Fehler bei der FAQ-Generierung. Bitte versuche es später erneut.");
+      } finally {
+        setIsGeneratingFAQs(false);
+        setGeneratingStatus('');
+      }
+    });
   };
 
-  const handleUpdateFaq = (id: string, updates: Partial<FAQItem>) => {
-    setFaqs(prev => prev.map(faq => faq.id === id ? { ...faq, ...updates } : faq));
-  };
-
-  const handleExportFaqs = () => {
-    // CSV Header
-    const headers = ['ID', 'Persona', 'Category', 'Question', 'Answer', 'Source Document', 'Feedback', 'Comment'];
-    
-    // CSV Rows
-    const rows = faqs.map(f => {
-      const pName = personas.find(p => p.id === f.personaId)?.name || 'Unknown';
-      return [
-        f.id,
-        `"${pName.replace(/"/g, '""')}"`,
-        `"${f.category.replace(/"/g, '""')}"`,
+  const handleExportCSV = () => {
+    const headers = ['Frage', 'Antwort', 'Kategorie', 'Quelle', 'Zielgruppe', 'Feedback', 'Kommentar'];
+    const rows = faqs.map(f => [
         `"${f.question.replace(/"/g, '""')}"`,
         `"${f.answer.replace(/"/g, '""')}"`,
-        `"${f.sourceDocName.replace(/"/g, '""')}"`,
-        f.feedback || '',
-        `"${(f.userComment || '').replace(/"/g, '""')}"`
-      ].join(',');
-    });
-
-    const csvContent = [headers.join(','), ...rows].join('\n');
+        `"${f.category}"`,
+        `"${f.sourceDocName}"`,
+        `"${personas.find(p => p.id === f.personaId)?.name || 'Unbekannt'}"`,
+        `"${f.feedback || ''}"`,
+        `"${f.userComment || ''}"`
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `wohnpro_faq_export_${new Date().toISOString().slice(0,10)}.csv`);
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `wohnpro_faq_export_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
-    document.body.removeChild(link);
   };
 
   if (showLanding && !currentUser) {
@@ -251,169 +385,173 @@ const App: React.FC = () => {
   if (!currentUser) {
     return (
       <>
-        {isSyncing && (
-          <div className="fixed top-4 right-4 z-[100] bg-blue-600 text-white px-4 py-2 rounded-full text-xs font-bold animate-pulse shadow-lg">
-            Synchronisiere mit Nextcloud...
-          </div>
-        )}
         <LoginView onLogin={handleLogin} />
+        <InstallPWA />
       </>
     );
   }
 
-  const selectedDocument = documents.find(d => d.id === selectedDocId);
-  const activeSession = sessions.find(s => s.id === currentSessionId);
-
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-screen bg-[#F8FAFC]">
+      <InstallPWA />
       <Sidebar 
-        isOpen={isSidebarOpen}
+        isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)}
         sessions={sessions}
         currentView={currentView}
-        setView={setCurrentView}
-        onSelectSession={(id) => {
-          setCurrentSessionId(id);
-          setCurrentView('chat');
-        }}
+        setView={(v) => { setCurrentView(v); setActiveDoc(null); if(v==='chat') setActiveSessionId(null); }}
+        onSelectSession={(id) => { setActiveSessionId(id); setCurrentView('chat'); setActiveDoc(null); }}
       />
-      
-      <main className="flex-1 h-full relative overflow-hidden flex flex-col pt-4 lg:pt-0">
-        <header className="flex items-center justify-between px-6 py-4 lg:hidden border-b border-gray-100 bg-white z-10">
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="p-2 hover:bg-gray-50 rounded-full transition-colors"
-            aria-label="Menü öffnen"
-          >
-            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-          <span className="font-bold text-gray-900 tracking-tight">Wohnpro Guide</span>
-          <div className="w-10" />
-        </header>
 
-        {isSyncing && (
-          <div className="absolute top-20 right-4 lg:top-4 z-50 animate-in slide-in-from-right-10 fade-in duration-700">
-             <div className="bg-blue-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg">
-               <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-               <span className="text-xs font-bold">Cloud Sync...</span>
-             </div>
-          </div>
-        )}
-
-        {isFaqGenerating && (
-          <div className="absolute top-4 right-4 z-50 animate-in slide-in-from-right-10 fade-in duration-700">
-            <div className="bg-black text-white px-6 py-3 rounded-2xl flex items-center gap-3 shadow-2xl ring-4 ring-black/5">
-              <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce [animation-duration:0.8s]" />
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.2s]" />
-                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-bounce [animation-duration:0.8s] [animation-delay:0.4s]" />
-              </div>
-              <div className="flex flex-col">
-                 <span className="text-[10px] font-black uppercase tracking-[0.2em]">KI lernt Hausregeln...</span>
-                 <span className="text-[9px] text-gray-400">{generatingStatus}</span>
-              </div>
+      <main className="flex-1 flex flex-col relative overflow-hidden h-full">
+        {/* FAQ Generation Popup */}
+        {isGeneratingFAQs && (
+          <div className="absolute top-4 right-4 z-50 bg-white shadow-lg rounded-xl p-4 border border-blue-100 flex items-center space-x-4 animate-in fade-in slide-in-from-top-4">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div>
+              <p className="font-semibold text-gray-900">KI lernt Hausregeln...</p>
+              <p className="text-sm text-gray-500">{generatingStatus || 'Analysiere Dokumente'}</p>
             </div>
           </div>
         )}
 
-        {currentView === 'chat' && (
-          <ChatView 
-            messages={activeSession?.messages || []}
-            onSendMessage={sendMessage}
-            onEnterVoice={() => setCurrentView('voice')}
-            onViewDocument={handleViewDocument}
-            isLoading={isLoading}
-          />
-        )}
+        {/* Header Mobile */}
+        <div className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-gray-100 z-30">
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <span className="font-bold text-gray-900">Wohnpro Guide</span>
+          <div className="w-10" />
+        </div>
 
-        {currentView === 'voice' && (
-          <VoiceMode 
-            onClose={() => setCurrentView('chat')}
-            onViewDocument={handleViewDocument}
-            documents={documents}
-          />
-        )}
-
-        {currentView === 'faq' && (
-          <FAQView 
-            faqs={faqs}
-            personas={personas}
-            onViewSource={handleViewDocument}
-            onUpdateFaq={handleUpdateFaq}
-            onExport={handleExportFaqs}
-          />
-        )}
-
-        {currentView.startsWith('admin') && (
-          <AdminPanel 
-            documents={documents}
-            users={users}
-            personas={personas}
-            activeTab={currentView.split('-')[1] as any}
-            setActiveTab={(tab) => setCurrentView(`admin-${tab}` as View)}
-            onAddDoc={handleAddDoc}
-            onRemoveDoc={(id) => {
-              setDocuments(prev => prev.filter(d => d.id !== id));
-              setFaqs(prev => prev.filter(f => f.sourceDocId !== id));
-            }}
-            onInviteUser={handleInviteUser}
-            onRemoveUser={(id) => {
-              const target = users.find(u => u.id === id);
-              const admins = users.filter(u => u.role === Role.ADMIN);
-              if (target?.role === Role.ADMIN && admins.length <= 1) {
-                alert("Sicherheitsabbruch: Das Wohnpro benötigt mindestens einen Administrator.");
-                return;
-              }
-              setUsers(users.filter(u => u.id !== id));
-            }}
-            onAddPersona={(p) => setPersonas(prev => [...prev, p])}
-            onUpdatePersona={(p) => setPersonas(prev => prev.map(existing => existing.id === p.id ? p : existing))}
-            onRemovePersona={(id) => {
-              if (personas.length <= 1) {
-                alert("Mindestens eine Persona muss existieren.");
-                return;
-              }
-              setPersonas(prev => prev.filter(p => p.id !== id));
-            }}
-          />
-        )}
-
-        {currentView === 'docs-view' && (
-          <div className="max-w-4xl mx-auto py-10 px-6 w-full overflow-y-auto no-scrollbar">
-            <h1 className="text-4xl font-black mb-8">Wohnpro Wissen</h1>
-            {documents.length === 0 ? (
-              <div className="py-20 text-center bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
-                <DocIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-400 font-medium">Der Wohnpro Guide hat noch kein Wissen. Admins müssen Dokumente hochladen.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="flex-1 relative overflow-hidden">
+          {activeDoc ? (
+            <DocumentDetail 
+              document={activeDoc.doc} 
+              onClose={() => setActiveDoc(null)} 
+              highlightText={activeDoc.highlightText}
+              highlightSection={activeDoc.highlightSection}
+            />
+          ) : currentView === 'chat' ? (
+            <ChatView 
+              messages={getActiveMessages()} 
+              onSendMessage={handleSendMessage}
+              onEnterVoice={() => setCurrentView('voice')}
+              onViewDocument={(name, text, section) => {
+                const doc = documents.find(d => d.name.toLowerCase().includes(name.toLowerCase()));
+                if (doc) setActiveDoc({ doc, highlightText: text, highlightSection: section });
+              }}
+              isLoading={isLoading}
+            />
+          ) : currentView === 'faq' ? (
+            <FAQView 
+              faqs={faqs}
+              personas={personas}
+              categories={categories}
+              onViewSource={(name) => {
+                const doc = documents.find(d => d.name.toLowerCase().includes(name.toLowerCase()));
+                if (doc) setActiveDoc({ doc });
+              }}
+              onUpdateFaq={(id, updates) => setFaqs(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f))}
+              onExport={handleExportCSV}
+              onRegenerate={handleRegenerateFAQs}
+              isLoading={isGeneratingFAQs}
+            />
+          ) : currentView === 'timeline' ? (
+              <TimelineView milestones={milestones} />
+          ) : currentView === 'voice' ? (
+            <VoiceMode 
+              documents={documents}
+              onClose={(transcript) => {
+                if (transcript && transcript.length > 0) {
+                  const newId = Math.random().toString(36).substr(2, 9);
+                  const newSession: ChatSession = {
+                    id: newId,
+                    title: 'Sprachgespräch ' + new Date().toLocaleTimeString(),
+                    messages: transcript,
+                    createdAt: new Date().toISOString()
+                  };
+                  setSessions(prev => [newSession, ...prev]);
+                }
+                setCurrentView('chat');
+              }}
+              onViewDocument={(name) => {
+                const doc = documents.find(d => d.name.toLowerCase().includes(name.toLowerCase()));
+                if (doc) setActiveDoc({ doc });
+              }}
+            />
+          ) : currentView === 'docs-view' ? (
+            <div className="p-10 space-y-8 overflow-y-auto h-full no-scrollbar">
+              <h1 className="text-4xl font-black mb-10">Dokumente</h1>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {documents.map(doc => (
-                  <button key={doc.id} onClick={() => handleViewDocument(doc.name)} className="bg-white border border-gray-100 rounded-[2.5rem] p-10 shadow-sm hover:shadow-xl transition-all text-left group">
-                    <div className="flex items-center justify-between mb-6">
-                      <DocIcon className="w-8 h-8 text-gray-300 group-hover:text-black transition-colors" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 px-3 py-1 rounded-full">{doc.category}</span>
+                  <button 
+                    key={doc.id} 
+                    onClick={() => setActiveDoc({ doc })}
+                    className="text-left bg-white p-8 rounded-[2.5rem] border border-gray-100 hover:shadow-2xl transition-all group"
+                  >
+                    <div className="p-4 bg-gray-50 rounded-2xl mb-6 group-hover:bg-black group-hover:text-white transition-all w-fit">
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     </div>
-                    <h3 className="text-xl font-bold mb-2">{doc.name}</h3>
-                    <p className="text-xs text-gray-400">Hinzugefügt am {doc.uploadDate}</p>
+                    <h3 className="font-bold text-lg mb-2 line-clamp-2">{doc.name}</h3>
+                    <p className="text-xs text-gray-400 font-black uppercase tracking-widest">{doc.category}</p>
                   </button>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {currentView === 'doc-detail' && selectedDocument && (
-          <DocumentDetail 
-            document={selectedDocument}
-            onClose={() => setCurrentView('docs-view')}
-            highlightText={highlightText}
-            highlightSection={highlightSection}
-          />
-        )}
+            </div>
+          ) : (
+            <AdminPanel 
+              activeTab={currentView.startsWith('admin-users') ? 'users' : currentView.startsWith('admin-personas') ? 'personas' : currentView.startsWith('admin-timeline') ? 'timeline' : currentView.startsWith('admin-prompts') ? 'prompts' : 'docs'}
+              setActiveTab={(tab) => setCurrentView(`admin-${tab}` as View)}
+              documents={documents}
+              users={users}
+              personas={personas}
+              milestones={milestones}
+              systemPrompts={systemPrompts}
+              onAddDoc={handleAddDocument}
+              onRemoveDoc={(id) => setDocuments(prev => prev.filter(d => d.id !== id))}
+              onInviteUser={(email, role, content) => setUsers(prev => [...prev, { id: Math.random().toString(), email, role, status: 'eingeladen', invitedAt: new Date().toISOString(), inviteEmailContent: content }])}
+              onRemoveUser={(id) => setUsers(prev => prev.filter(u => u.id !== id))}
+              onAddPersona={(p) => setPersonas(prev => [...prev, p])}
+              onUpdatePersona={(p) => setPersonas(prev => prev.map(old => old.id === p.id ? p : old))}
+              onRemovePersona={(id) => setPersonas(prev => prev.filter(p => p.id !== id))}
+              onUpdateMilestones={setMilestones}
+              onUpdateSystemPrompts={setSystemPrompts}
+              showAlert={showAlert}
+            />
+          )}
+        </div>
       </main>
+
+      {modalState.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[2rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500 p-8">
+            <h3 className="text-2xl font-black mb-4">{modalState.title}</h3>
+            <p className="text-gray-600 mb-8">{modalState.message}</p>
+            <div className="flex justify-end gap-4">
+              {modalState.type === 'confirm' && (
+                <button 
+                  onClick={() => setModalState({ ...modalState, isOpen: false })}
+                  className="px-6 py-3 rounded-2xl font-bold text-gray-500 hover:bg-gray-100 transition-all"
+                >
+                  Abbrechen
+                </button>
+              )}
+              <button 
+                onClick={() => {
+                  if (modalState.type === 'confirm' && modalState.onConfirm) {
+                    modalState.onConfirm();
+                  }
+                  setModalState({ ...modalState, isOpen: false });
+                }}
+                className="bg-black text-white px-6 py-3 rounded-2xl font-bold hover:bg-gray-800 transition-all active:scale-95"
+              >
+                {modalState.type === 'confirm' ? 'Bestätigen' : 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

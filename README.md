@@ -56,8 +56,9 @@ The application can be configured using environment variables (e.g., in a `.env`
 | Variable | Description | Required For |
 | :--- | :--- | :--- |
 | `API_KEY` | Google Gemini API Key. | **Standard Mode** |
+| `GEMINI_PRO_API_KEY` | Specific API Key for gemini-3.1-pro-preview (Optional). | Pro Features |
 | `GCP_PROJECT` | Google Cloud Project ID. | Vertex AI Mode |
-| `GCP_LOCATION` | Google Cloud Region (e.g. `us-central1`). | Vertex AI Mode |
+| `GCP_LOCATION` | Google Cloud Region (e.g. `europe-west3`). | Vertex AI Mode |
 | `NEXTCLOUD_URL` | Base URL of your Nextcloud instance (e.g. `https://cloud.example.com`). | **Nextcloud Mode** |
 | `NEXTCLOUD_USER` | Username or Bot Account name for WebDAV access. | **Nextcloud Mode** |
 | `NEXTCLOUD_PASSWORD` | App Password for the user (Generated in Nextcloud Security Settings). | **Nextcloud Mode** |
@@ -105,8 +106,9 @@ To enable automatic document conversion via Nextcloud Webhooks without Docker, r
 This project uses the `@google/genai` SDK to access specific Gemini models.
 
 ### 1. Text & RAG
-*   **Model**: `gemini-3-flash-preview`
+*   **Model**: `gemini-3.1-pro-preview` (for complex tasks like FAQ generation and chat) and `gemini-3-flash-preview` (for simpler tasks).
 *   **Purpose**: Used for the main chat interface, generating FAQs from documents, and verifying user invitations.
+*   **EU Region Mapping**: You can map the API to the EU version of this model by using Vertex AI with `GCP_LOCATION=europe-west3` or by providing a specific `GEMINI_PRO_API_KEY`.
 
 ### 2. Speech-to-Text (STT) & Text-to-Speech (TTS)
 *   **Model**: `gemini-2.5-flash-native-audio-preview-12-2025`

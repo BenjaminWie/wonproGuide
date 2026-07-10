@@ -1,10 +1,11 @@
 
 import React, { useState, useCallback, useRef } from 'react';
-import { Document as AppDocument, User, Role, UserStatus, Persona } from '../types';
-import { PlusIcon, TrashIcon, DocIcon, CloseIcon, UserPlusIcon, CheckCircleIcon, ClockIcon, AlertIcon, ShieldIcon, ArrowRightIcon, HelpIcon } from './Icons';
+import { Document as AppDocument, User, Role, UserStatus, Persona, Category, Milestone } from '../types';
+import { PlusIcon, TrashIcon, DocIcon, CloseIcon, UserPlusIcon, CheckCircleIcon, ClockIcon, AlertIcon, ShieldIcon, ArrowRightIcon, HelpIcon, CalendarIcon, DownloadIcon, UploadIcon } from './Icons';
 import { gemini } from '../services/geminiService';
 import * as mammoth from 'mammoth';
 import * as pdfjs from 'pdfjs-dist';
+import * as XLSX from 'xlsx';
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs`;
@@ -13,6 +14,8 @@ interface AdminPanelProps {
   documents: AppDocument[];
   users: User[];
   personas: Persona[];
+  milestones?: Milestone[];
+  systemPrompts: { textPrompt: string, voicePrompt: string, faqPrompt: string };
   onAddDoc: (doc: AppDocument) => void;
   onRemoveDoc: (id: string) => void;
   onInviteUser: (email: string, role: Role, content: string) => void;
@@ -20,15 +23,19 @@ interface AdminPanelProps {
   onAddPersona: (persona: Persona) => void;
   onUpdatePersona: (persona: Persona) => void;
   onRemovePersona: (id: string) => void;
-  activeTab: 'docs' | 'users' | 'personas';
-  setActiveTab: (tab: 'docs' | 'users' | 'personas') => void;
+  onUpdateMilestones: (milestones: Milestone[]) => void;
+  onUpdateSystemPrompts: (prompts: { textPrompt: string, voicePrompt: string, faqPrompt: string }) => void;
+  showAlert: (title: string, message: string) => void;
+  activeTab: 'docs' | 'users' | 'personas' | 'timeline' | 'prompts';
+  setActiveTab: (tab: 'docs' | 'users' | 'personas' | 'timeline' | 'prompts') => void;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
-  documents, users, personas, onAddDoc, onRemoveDoc, onInviteUser, onRemoveUser, onAddPersona, onUpdatePersona, onRemovePersona, activeTab, setActiveTab 
+  documents, users, personas, milestones = [], systemPrompts, onAddDoc, onRemoveDoc, onInviteUser, onRemoveUser, onAddPersona, onUpdatePersona, onRemovePersona, onUpdateMilestones, onUpdateSystemPrompts, showAlert, activeTab, setActiveTab 
 }) => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPersonaModal, setShowPersonaModal] = useState(false);
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
   const [editingPersona, setEditingPersona] = useState<Persona | null>(null);
 
   const [inviteStep, setInviteStep] = useState<'input' | 'preview' | 'verifying'>('input');
@@ -46,6 +53,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [personaName, setPersonaName] = useState('');
   const [personaDesc, setPersonaDesc] = useState('');
   const [personaRole, setPersonaRole] = useState<'beginner' | 'expert'>('beginner');
+
+  // Milestone State (New)
+  const [newMilestone, setNewMilestone] = useState<Partial<Milestone>>({
+     title: '', startDate: '', endDate: '', owner: '', progress: 0, status: 'planned', description: ''
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,15 +90,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     return fullText;
   };
 
-  const determineCategory = (name: string): AppDocument['category'] => {
-    const n = name.toLowerCase();
-    if (n.includes('satzung') || n.includes('vertrag') || n.includes('recht') || n.includes('gbh') || n.includes('genossenschaft')) return 'Recht & Struktur';
-    if (n.includes('vision') || n.includes('selbst') || n.includes('werte') || n.includes('konzept') || n.includes('leitbild')) return 'Selbstverständnis & Vision';
-    if (n.includes('aufnahme') || n.includes('mitglied') || n.includes('mitwirkung') || n.includes('teilnahme') || n.includes('ag')) return 'Teilnahme & Mitwirkung';
-    if (n.includes('protokoll') || n.includes('beschluss') || n.includes('entscheidung') || n.includes('plenum') || n.includes('versammlung')) return 'Entscheidungen & Prozesse';
-    return 'Regeln & Hausordnung';
-  };
-
   const handleFiles = async (files: FileList) => {
     setIsDragging(false);
     for (let i = 0; i < files.length; i++) {
@@ -94,7 +97,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       const type = file.name.split('.').pop()?.toLowerCase();
       
       if (type !== 'pdf' && type !== 'docx') {
-        alert(`Dateityp .${type} wird nicht unterstützt. Bitte lade nur .pdf oder .docx hoch.`);
+        showAlert("Fehler", `Dateityp .${type} wird nicht unterstützt. Bitte lade nur .pdf oder .docx hoch.`);
         continue;
       }
 
@@ -105,7 +108,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         const newDoc: AppDocument = {
           id: Math.random().toString(36).substr(2, 9),
           name: file.name,
-          category: determineCategory(file.name),
+          category: 'Wird analysiert...', // Will be updated by AI in App.tsx
           uploadDate: new Date().toLocaleDateString('de-DE'),
           content: text,
           status: 'aktiv'
@@ -114,7 +117,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         onAddDoc(newDoc);
       } catch (err) {
         console.error("Fehler beim Verarbeiten:", err);
-        alert(`Fehler beim Einlesen von ${file.name}`);
+        showAlert("Fehler", `Fehler beim Einlesen von ${file.name}`);
       }
     }
     setUploadProgress(null);
@@ -202,6 +205,92 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setShowPersonaModal(true);
   };
 
+  const handleAddMilestone = () => {
+    if(!newMilestone.title || !newMilestone.startDate) return;
+    const m: Milestone = {
+        id: Math.random().toString(36).substr(2, 9),
+        title: newMilestone.title,
+        startDate: newMilestone.startDate,
+        endDate: newMilestone.endDate || newMilestone.startDate,
+        owner: newMilestone.owner || 'Unassigned',
+        progress: newMilestone.progress || 0,
+        status: newMilestone.status as any || 'planned',
+        description: newMilestone.description || ''
+    };
+    onUpdateMilestones([...milestones, m]);
+    setNewMilestone({ title: '', startDate: '', endDate: '', owner: '', progress: 0, status: 'planned', description: '' });
+    setShowMilestoneModal(false);
+  };
+
+  const handleRemoveMilestone = (id: string) => {
+      onUpdateMilestones(milestones.filter(m => m.id !== id));
+  };
+
+  const handleExportTimeline = () => {
+    // Convert milestones to SheetJS format
+    const rows = milestones.map(m => ({
+        Titel: m.title,
+        Start: m.startDate,
+        Ende: m.endDate,
+        Verantwortlich: m.owner,
+        Fortschritt: m.progress,
+        Status: m.status,
+        Beschreibung: m.description
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Zeitplan");
+    
+    // Trigger download
+    XLSX.writeFile(workbook, "timeline.xlsx");
+  };
+
+  const timelineFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportTimeline = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+        const importedMilestones: Milestone[] = data.map(row => ({
+          id: Math.random().toString(36).substr(2, 9),
+          title: row['Titel'] || row['title'] || 'Unbenannt',
+          startDate: row['Start'] || row['startDate'] || '',
+          endDate: row['Ende'] || row['endDate'] || row['Start'] || row['startDate'] || '',
+          owner: row['Verantwortlich'] || row['owner'] || 'Unassigned',
+          progress: Number(row['Fortschritt'] || row['progress']) || 0,
+          status: (row['Status'] || row['status'] || 'planned') as any,
+          description: row['Beschreibung'] || row['description'] || ''
+        }));
+
+        if (importedMilestones.length > 0) {
+          onUpdateMilestones([...milestones, ...importedMilestones]);
+          showAlert("Erfolg", `${importedMilestones.length} Meilensteine erfolgreich importiert.`);
+        } else {
+          showAlert("Fehler", "Die Datei enthält keine gültigen Meilensteine.");
+        }
+      } catch (error) {
+        console.error("Error importing timeline:", error);
+        showAlert("Fehler", "Fehler beim Importieren der Datei. Bitte stellen Sie sicher, dass es sich um eine gültige Excel-Datei handelt.");
+      }
+      
+      // Reset input
+      if (timelineFileInputRef.current) {
+        timelineFileInputRef.current.value = '';
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
   const getStatusIcon = (status: UserStatus) => {
     switch (status) {
       case 'aktiv': return <ShieldIcon className="w-5 h-5 text-blue-500" />;
@@ -217,13 +306,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-4xl mx-auto px-6 pt-10">
           <div className="flex gap-8 overflow-x-auto no-scrollbar">
-            {['docs', 'users', 'personas'].map(tab => (
+            {['docs', 'users', 'personas', 'timeline', 'prompts'].map(tab => (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
                 className={`pb-4 text-sm font-black uppercase tracking-[0.2em] relative transition-colors whitespace-nowrap ${activeTab === tab ? 'text-black' : 'text-gray-300 hover:text-black'}`}
               >
-                {tab === 'docs' ? 'Dokumente' : tab === 'users' ? 'Mitglieder' : 'FAQ-Personas'}
+                {tab === 'docs' ? 'Dokumente' : tab === 'users' ? 'Mitglieder' : tab === 'timeline' ? 'Zeitplan' : tab === 'personas' ? 'FAQ-Personas' : 'System Prompts'}
                 {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />}
               </button>
             ))}
@@ -276,6 +365,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
                   Dateien (.pdf, .docx) hier ablegen. Die KI generiert automatisch FAQs für alle aktiven Personas.
                 </p>
+                <div className="mt-4 px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-medium max-w-sm relative group cursor-help">
+                  <ShieldIcon className="w-4 h-4 inline-block mr-2 text-slate-500" />
+                  Sicher & Lokal gespeichert
+                  <div className="absolute opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity bg-slate-900 text-white p-3 rounded-lg text-xs w-64 bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none z-10 shadow-xl">
+                    Ihre Dokumente werden sicher und dauerhaft im lokalen Cache Ihres Browsers gespeichert. Sie verbleiben auf Ihrem Gerät und werden niemals in einer Cloud gespeichert. Nur für die Verarbeitung durch die KI werden sie temporär über eine sichere Verbindung gesendet. Installieren Sie die App als PWA für optimale Offline-Nutzung.
+                    <div className="absolute w-2 h-2 bg-slate-900 rotate-45 left-1/2 -translate-x-1/2 -bottom-1"></div>
+                  </div>
+                </div>
               </div>
 
               {documents.length > 0 && (
@@ -309,7 +406,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               )}
             </div>
           )}
-
+          
+          {/* ... (Rest of tabs remain identical, omitted for brevity but XML change block is specific enough) */}
           {activeTab === 'users' && (
             <div className="space-y-8">
               <div className="flex items-center justify-between mb-2">
@@ -417,14 +515,146 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                </div>
              </div>
           )}
+
+          {activeTab === 'timeline' && (
+             <div className="space-y-8">
+                 <div className="flex items-center justify-between mb-4">
+                     <div>
+                        <p className="text-sm text-gray-400 max-w-md">Bearbeite den Zeitplan. Wenn Nextcloud verbunden ist, werden diese Daten in <code>timeline.xlsx</code> gespeichert.</p>
+                     </div>
+                     <div className="flex gap-2">
+                        <input 
+                            type="file" 
+                            accept=".xlsx, .xls" 
+                            className="hidden" 
+                            ref={timelineFileInputRef}
+                            onChange={handleImportTimeline}
+                        />
+                        <button 
+                            onClick={() => timelineFileInputRef.current?.click()}
+                            className="bg-gray-100 text-gray-600 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-all active:scale-95"
+                        >
+                            <UploadIcon className="w-5 h-5" />
+                            Excel Import
+                        </button>
+                        <button 
+                            onClick={handleExportTimeline}
+                            className="bg-gray-100 text-gray-600 px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-gray-200 transition-all active:scale-95"
+                        >
+                            <DownloadIcon className="w-5 h-5" />
+                            Excel Export
+                        </button>
+                        <button 
+                            onClick={() => setShowMilestoneModal(true)}
+                            className="bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-gray-800 transition-all active:scale-95 shadow-lg shadow-black/10"
+                        >
+                            <PlusIcon className="w-5 h-5" />
+                            Neuer Meilenstein
+                        </button>
+                     </div>
+                 </div>
+
+                 <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-sm">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50/50 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                <th className="px-8 py-5">Aufgabe</th>
+                                <th className="px-8 py-5">Zeitraum</th>
+                                <th className="px-8 py-5">Status</th>
+                                <th className="px-8 py-5"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {milestones.map(m => (
+                                <tr key={m.id} className="group hover:bg-gray-50/30">
+                                    <td className="px-8 py-5">
+                                        <span className="font-bold text-gray-900 block">{m.title}</span>
+                                        <span className="text-xs text-gray-400">{m.owner}</span>
+                                    </td>
+                                    <td className="px-8 py-5 text-sm text-gray-600">
+                                        {m.startDate} <span className="text-gray-300 mx-1">→</span> {m.endDate}
+                                    </td>
+                                    <td className="px-8 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2 h-2 rounded-full ${m.status === 'done' ? 'bg-green-500' : m.status === 'active' ? 'bg-blue-500' : m.status === 'delayed' ? 'bg-red-400' : 'bg-gray-300'}`} />
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{m.status}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-right">
+                                        <button onClick={() => handleRemoveMilestone(m.id)} className="p-2 text-gray-200 hover:text-red-500 transition-colors">
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {milestones.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="px-8 py-10 text-center text-gray-400 italic">Keine Meilensteine definiert.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                 </div>
+             </div>
+          )}
+
+          {activeTab === 'prompts' && (
+             <div className="space-y-8">
+                 <div className="flex items-center justify-between mb-4">
+                     <div>
+                        <p className="text-sm text-gray-400 max-w-md">Bearbeite die System Prompts für den Text-Chat, den Voice-Modus und die FAQ-Generierung.</p>
+                     </div>
+                     <button 
+                         onClick={() => {
+                             onUpdateSystemPrompts({
+                                 textPrompt: (document.getElementById('textPromptInput') as HTMLTextAreaElement).value,
+                                 voicePrompt: (document.getElementById('voicePromptInput') as HTMLTextAreaElement).value,
+                                 faqPrompt: (document.getElementById('faqPromptInput') as HTMLTextAreaElement).value
+                             });
+                             showAlert("Erfolg", 'System Prompts gespeichert!');
+                         }}
+                         className="bg-black text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-gray-800 transition-all active:scale-95 shadow-lg shadow-black/10"
+                     >
+                         Speichern
+                     </button>
+                 </div>
+
+                 <div className="space-y-6">
+                     <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                         <h3 className="text-xl font-bold text-gray-900 mb-4">Text-Chat System Prompt</h3>
+                         <textarea 
+                             id="textPromptInput"
+                             defaultValue={systemPrompts.textPrompt}
+                             className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-black/10 resize-y min-h-[300px]"
+                         />
+                     </div>
+                     
+                     <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                         <h3 className="text-xl font-bold text-gray-900 mb-4">Voice-Modus System Prompt</h3>
+                         <textarea 
+                             id="voicePromptInput"
+                             defaultValue={systemPrompts.voicePrompt}
+                             className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-black/10 resize-y min-h-[300px]"
+                         />
+                     </div>
+
+                     <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                         <h3 className="text-xl font-bold text-gray-900 mb-4">FAQ-Generierung System Prompt</h3>
+                         <textarea 
+                             id="faqPromptInput"
+                             defaultValue={systemPrompts.faqPrompt}
+                             className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-black/10 resize-y min-h-[300px]"
+                         />
+                     </div>
+                 </div>
+             </div>
+          )}
         </div>
       </div>
 
-      {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500">
-            {/* ... invite modal content same as before ... */}
             <div className="p-8 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-50 rounded-xl">
@@ -451,69 +681,60 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => setInviteRole(Role.USER)} className={`p-6 rounded-3xl border transition-all text-left ${inviteRole === Role.USER ? 'border-black bg-black text-white shadow-xl' : 'border-gray-100 text-gray-400 hover:border-black/20'}`}>
-                      <span className="block font-black text-xs uppercase mb-1">Standard</span>
-                      <span className="text-xl font-bold">Bewohner</span>
+                    <button onClick={() => setInviteRole(Role.USER)} className={`p-6 rounded-3xl border transition-all text-left ${inviteRole === Role.USER ? 'border-black bg-black text-white shadow-xl' : 'border-gray-100 text-gray-400 hover:border-gray-200'}`}>
+                      <span className="block text-sm font-bold mb-1">Bewohner</span>
+                      <span className="text-xs opacity-70">Lesezugriff auf alle Bereiche</span>
                     </button>
-                    <button onClick={() => setInviteRole(Role.ADMIN)} className={`p-6 rounded-3xl border transition-all text-left ${inviteRole === Role.ADMIN ? 'border-black bg-black text-white shadow-xl' : 'border-gray-100 text-gray-400 hover:border-black/20'}`}>
-                      <span className="block font-black text-xs uppercase mb-1">Verwaltung</span>
-                      <span className="text-xl font-bold">Wohnpro Admin</span>
+                    <button onClick={() => setInviteRole(Role.ADMIN)} className={`p-6 rounded-3xl border transition-all text-left ${inviteRole === Role.ADMIN ? 'border-black bg-black text-white shadow-xl' : 'border-gray-100 text-gray-400 hover:border-gray-200'}`}>
+                      <span className="block text-sm font-bold mb-1">Verwalter</span>
+                      <span className="text-xs opacity-70">Kann Dokumente hochladen</span>
                     </button>
                   </div>
-                  <button 
-                    onClick={handlePrepareInvitation}
-                    disabled={isProcessing || !inviteEmail.includes('@')}
-                    className="w-full bg-blue-600 text-white rounded-2xl py-5 font-bold hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-300 transition-all flex items-center justify-center gap-2"
-                  >
-                    {isProcessing ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Einladung vorbereiten'}
+                  <button onClick={handlePrepareInvitation} disabled={!inviteEmail} className="w-full bg-black text-white py-4 rounded-2xl font-bold shadow-xl shadow-black/10 hover:bg-gray-800 disabled:opacity-50 transition-all">
+                    {isProcessing ? 'Generiere Einladung...' : 'Weiter'}
                   </button>
                 </div>
               )}
 
               {inviteStep === 'preview' && (
-                <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
-                  <div className="bg-gray-50 rounded-[2rem] p-8 border border-gray-100">
-                    <div className="flex items-center gap-4 mb-6 border-b border-gray-200 pb-4">
-                      <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-bold shadow-sm">G</div>
-                      <div>
-                        <p className="text-xs font-bold">An: {inviteEmail}</p>
-                        <p className="text-[10px] text-gray-400">Betreff: Willkommen im Wohnpro Guide</p>
-                      </div>
-                    </div>
-                    <div className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap font-serif italic h-48 overflow-y-auto">
-                      {aiDraft}
-                    </div>
+                <div className="space-y-6">
+                  <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">Vorschau der KI-Einladung</p>
+                    <p className="text-gray-600 whitespace-pre-wrap leading-relaxed">{aiDraft}</p>
                   </div>
                   <div className="flex gap-4">
-                    <button onClick={() => setInviteStep('input')} className="flex-1 py-4 font-bold text-gray-400 hover:text-black">Anpassen</button>
-                    <button 
-                      onClick={handleFinalizeInvite}
-                      className="flex-[2] bg-black text-white rounded-2xl py-4 font-bold flex items-center justify-center gap-2 hover:bg-gray-800"
-                    >
-                      Prüfen & Absenden
-                      <ArrowRightIcon className="w-4 h-4" />
-                    </button>
+                    <button onClick={() => setInviteStep('input')} className="flex-1 py-4 rounded-2xl font-bold border border-gray-100 hover:bg-gray-50 transition-all">Zurück</button>
+                    <button onClick={handleFinalizeInvite} className="flex-1 bg-black text-white py-4 rounded-2xl font-bold shadow-xl shadow-black/10 hover:bg-gray-800 transition-all">Einladen senden</button>
                   </div>
                 </div>
               )}
 
               {inviteStep === 'verifying' && (
-                <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 animate-in fade-in duration-500">
-                  <div className="relative">
-                    <div className="w-24 h-24 border-4 border-blue-50 rounded-full flex items-center justify-center">
-                      <ShieldIcon className="w-10 h-10 text-blue-200 animate-pulse" />
-                    </div>
-                    <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black">Wohnpro Guide Check läuft</h3>
-                    <p className="text-sm text-gray-400">Google AI überprüft Identität und Wohnpro-Richtlinien...</p>
-                  </div>
-                  {verificationResult && (
-                    <div className="bg-green-50 text-green-700 px-6 py-3 rounded-full text-xs font-bold flex items-center gap-2">
-                      <CheckCircleIcon className="w-4 h-4" />
-                      {verificationResult.reason}
-                    </div>
+                <div className="text-center py-10 space-y-6">
+                  {verificationResult ? (
+                    verificationResult.success ? (
+                      <>
+                        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in">
+                          <CheckCircleIcon className="w-10 h-10" />
+                        </div>
+                        <h3 className="text-2xl font-black text-gray-900">Einladung versendet!</h3>
+                        <p className="text-gray-500">Der Bewohner wurde erfolgreich zum System hinzugefügt.</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-in zoom-in">
+                          <AlertIcon className="w-10 h-10" />
+                        </div>
+                        <h3 className="text-2xl font-black text-gray-900">Verifizierung fehlgeschlagen</h3>
+                        <p className="text-gray-500">{verificationResult.reason}</p>
+                        <button onClick={resetInvite} className="mt-6 text-black underline font-bold">Erneut versuchen</button>
+                      </>
+                    )
+                  ) : (
+                    <>
+                      <div className="w-16 h-16 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-6" />
+                      <p className="text-gray-500 font-medium">KI überprüft Berechtigungen...</p>
+                    </>
                   )}
                 </div>
               )}
@@ -522,64 +743,156 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* Persona Modal */}
       {showPersonaModal && (
          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-            <div className="bg-white w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500">
+            <div className="bg-white w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500">
                <div className="p-8 border-b border-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                     <div className="p-2 bg-purple-50 rounded-xl">
-                        <HelpIcon className="w-5 h-5 text-purple-600" />
-                     </div>
-                     <span className="font-black text-sm uppercase tracking-widest">{editingPersona ? 'Persona bearbeiten' : 'Neue FAQ Persona'}</span>
-                  </div>
+                  <h3 className="font-black text-xl">Persona konfigurieren</h3>
                   <button onClick={() => setShowPersonaModal(false)} className="p-2 text-gray-300 hover:text-black transition-colors">
                      <CloseIcon className="w-6 h-6" />
                   </button>
                </div>
-               
-               <div className="p-10 space-y-8">
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Name der Zielgruppe</label>
+               <div className="p-8 space-y-6">
+                  <div>
+                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Name der Zielgruppe</label>
                      <input 
                         type="text" 
                         value={personaName}
                         onChange={(e) => setPersonaName(e.target.value)}
-                        placeholder="z.B. 'Der Kritische Nachbar'"
-                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold focus:outline-none focus:ring-4 focus:ring-purple-500/10 text-lg"
+                        placeholder="z.B. Junge Familie"
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-bold focus:outline-none focus:ring-2 focus:ring-black/10"
                      />
                   </div>
-
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">KI-Prompt / Beschreibung</label>
+                  <div>
+                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Beschreibung & Interessen</label>
                      <textarea 
                         value={personaDesc}
                         onChange={(e) => setPersonaDesc(e.target.value)}
-                        placeholder="Beschreibe, was diese Person wissen will und wie die Antworten klingen sollen. Z.B. 'Du bist skeptisch, achtest auf Finanzen und magst kurze Fakten.'"
-                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-medium focus:outline-none focus:ring-4 focus:ring-purple-500/10 min-h-[120px]"
+                        placeholder="Beschreibe, was diese Person wissen will..."
+                        rows={4}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-black/10 resize-none"
                      />
-                     <p className="text-xs text-gray-400 ml-2">Dies ist die direkte Anweisung an die KI, wie sie Fragen aus Dokumenten extrahieren soll.</p>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                     <button onClick={() => setPersonaRole('beginner')} className={`p-4 rounded-2xl border transition-all text-center ${personaRole === 'beginner' ? 'border-green-500 bg-green-50 text-green-700 font-bold' : 'border-gray-100 text-gray-400'}`}>
-                        Einsteiger / Interessiert
-                     </button>
-                     <button onClick={() => setPersonaRole('expert')} className={`p-4 rounded-2xl border transition-all text-center ${personaRole === 'expert' ? 'border-purple-500 bg-purple-50 text-purple-700 font-bold' : 'border-gray-100 text-gray-400'}`}>
-                        Experte / Detailverliebt
-                     </button>
+                  <div>
+                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Wissensstand</label>
+                     <div className="flex gap-3">
+                        <button 
+                           onClick={() => setPersonaRole('beginner')}
+                           className={`flex-1 py-3 rounded-2xl font-bold text-sm border transition-all ${personaRole === 'beginner' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'}`}
+                        >
+                           Einsteiger
+                        </button>
+                        <button 
+                           onClick={() => setPersonaRole('expert')}
+                           className={`flex-1 py-3 rounded-2xl font-bold text-sm border transition-all ${personaRole === 'expert' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'}`}
+                        >
+                           Experte
+                        </button>
+                     </div>
                   </div>
-
                   <button 
                      onClick={handleSavePersona}
                      disabled={!personaName || !personaDesc}
-                     className="w-full bg-black text-white rounded-2xl py-5 font-bold hover:bg-gray-900 disabled:bg-gray-100 disabled:text-gray-300 transition-all shadow-xl shadow-black/10"
+                     className="w-full bg-black text-white py-4 rounded-2xl font-bold shadow-xl shadow-black/10 hover:bg-gray-800 disabled:opacity-50 transition-all"
                   >
-                     {editingPersona ? 'Änderungen speichern' : 'Persona erstellen'}
+                     Speichern
                   </button>
                </div>
             </div>
          </div>
+      )}
+
+      {showMilestoneModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+           <div className="bg-white w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500">
+              <div className="p-8 border-b border-gray-100 flex items-center justify-between">
+                 <h3 className="font-black text-xl">Neuer Meilenstein</h3>
+                 <button onClick={() => setShowMilestoneModal(false)} className="p-2 text-gray-300 hover:text-black transition-colors">
+                    <CloseIcon className="w-6 h-6" />
+                 </button>
+              </div>
+              <div className="p-8 space-y-4 overflow-y-auto max-h-[70vh]">
+                 <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Titel</label>
+                    <input 
+                       type="text" 
+                       value={newMilestone.title}
+                       onChange={(e) => setNewMilestone({...newMilestone, title: e.target.value})}
+                       className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-bold"
+                    />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Start</label>
+                        <input 
+                           type="date" 
+                           value={newMilestone.startDate}
+                           onChange={(e) => setNewMilestone({...newMilestone, startDate: e.target.value})}
+                           className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-medium text-sm"
+                        />
+                     </div>
+                     <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Ende</label>
+                        <input 
+                           type="date" 
+                           value={newMilestone.endDate}
+                           onChange={(e) => setNewMilestone({...newMilestone, endDate: e.target.value})}
+                           className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-medium text-sm"
+                        />
+                     </div>
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Verantwortlich (AG / Person)</label>
+                    <input 
+                       type="text" 
+                       value={newMilestone.owner}
+                       onChange={(e) => setNewMilestone({...newMilestone, owner: e.target.value})}
+                       className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-medium"
+                    />
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Status</label>
+                        <select 
+                           value={newMilestone.status}
+                           onChange={(e) => setNewMilestone({...newMilestone, status: e.target.value as any})}
+                           className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-medium text-sm"
+                        >
+                            <option value="planned">Geplant</option>
+                            <option value="active">In Arbeit</option>
+                            <option value="done">Abgeschlossen</option>
+                            <option value="delayed">Verzögert</option>
+                        </select>
+                     </div>
+                     <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Fortschritt (%)</label>
+                        <input 
+                           type="number" 
+                           min="0" max="100"
+                           value={newMilestone.progress}
+                           onChange={(e) => setNewMilestone({...newMilestone, progress: parseInt(e.target.value)})}
+                           className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-medium text-sm"
+                        />
+                     </div>
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2 block mb-2">Beschreibung</label>
+                    <textarea 
+                       value={newMilestone.description}
+                       onChange={(e) => setNewMilestone({...newMilestone, description: e.target.value})}
+                       className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3 font-medium text-sm resize-none"
+                       rows={3}
+                    />
+                 </div>
+                 <button 
+                    onClick={handleAddMilestone}
+                    className="w-full bg-black text-white py-4 rounded-2xl font-bold shadow-xl shadow-black/10 hover:bg-gray-800 transition-all"
+                 >
+                    Meilenstein hinzufügen
+                 </button>
+              </div>
+           </div>
+        </div>
       )}
     </div>
   );

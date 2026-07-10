@@ -22,7 +22,17 @@ import {
   HelpCircle,
   ThumbsUp,
   ThumbsDown,
-  Download
+  Download,
+  Sparkles,
+  Wand2,
+  Check,
+  Search,
+  MessageCircle,
+  Volume2,
+  Lightbulb,
+  Calendar,
+  MoreHorizontal,
+  Upload
 } from 'lucide-react';
 
 export const ChatIcon = ({ className = "w-6 h-6" }) => <MessageSquare className={className} />;
@@ -31,18 +41,29 @@ export const DocIcon = ({ className = "w-6 h-6" }) => <FileText className={class
 export const SettingsIcon = ({ className = "w-6 h-6" }) => <Settings className={className} />;
 export const PlusIcon = ({ className = "w-6 h-6" }) => <Plus className={className} />;
 export const TrashIcon = ({ className = "w-6 h-6" }) => <Trash2 className={className} />;
-export const ArrowRightIcon = ({ className = "w-6 h-6" }) => <ArrowRight className={className} />;
+export const ChevronRightIcon = ({ className = "w-6 h-6" }) => <ChevronRight className={className} />;
+export const ChevronDownIcon = ({ className = "w-6 h-6" }) => <ChevronDown className={className} />;
 export const MenuIcon = ({ className = "w-6 h-6" }) => <Menu className={className} />;
 export const CloseIcon = ({ className = "w-6 h-6" }) => <X className={className} />;
 export const ClockIcon = ({ className = "w-6 h-6" }) => <Clock className={className} />;
 export const InfoIcon = ({ className = "w-6 h-6" }) => <Info className={className} />;
+export const ArrowRightIcon = ({ className = "w-6 h-6" }) => <ArrowRight className={className} />;
 export const UserPlusIcon = ({ className = "w-6 h-6" }) => <UserPlus className={className} />;
 export const CheckCircleIcon = ({ className = "w-6 h-6" }) => <CheckCircle2 className={className} />;
 export const MailIcon = ({ className = "w-6 h-6" }) => <Mail className={className} />;
 export const AlertIcon = ({ className = "w-6 h-6" }) => <AlertCircle className={className} />;
 export const ShieldIcon = ({ className = "w-6 h-6" }) => <ShieldCheck className={className} />;
 export const HelpIcon = ({ className = "w-6 h-6" }) => <HelpCircle className={className} />;
-export const ChevronDownIcon = ({ className = "w-6 h-6" }) => <ChevronDown className={className} />;
 export const ThumbsUpIcon = ({ className = "w-6 h-6" }) => <ThumbsUp className={className} />;
 export const ThumbsDownIcon = ({ className = "w-6 h-6" }) => <ThumbsDown className={className} />;
 export const DownloadIcon = ({ className = "w-6 h-6" }) => <Download className={className} />;
+export const UploadIcon = ({ className = "w-6 h-6" }) => <Upload className={className} />;
+export const SparklesIcon = ({ className = "w-6 h-6" }) => <Sparkles className={className} />;
+export const WandIcon = ({ className = "w-6 h-6" }) => <Wand2 className={className} />;
+export const CheckIcon = ({ className = "w-6 h-6" }) => <Check className={className} />;
+export const SearchIcon = ({ className = "w-6 h-6" }) => <Search className={className} />;
+export const MessageIcon = ({ className = "w-6 h-6" }) => <MessageCircle className={className} />;
+export const VolumeIcon = ({ className = "w-6 h-6" }) => <Volume2 className={className} />;
+export const IdeaIcon = ({ className = "w-6 h-6" }) => <Lightbulb className={className} />;
+export const CalendarIcon = ({ className = "w-6 h-6" }) => <Calendar className={className} />;
+export const MoreIcon = ({ className = "w-6 h-6" }) => <MoreHorizontal className={className} />;
