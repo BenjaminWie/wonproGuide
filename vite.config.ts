@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
         react(),
         VitePWA({
           registerType: 'autoUpdate',
-          includeAssets: ['icon.svg'],
+          includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
           injectRegister: 'auto',
           manifest: {
             name: 'Wohnpro Guide',
@@ -34,6 +34,18 @@ export default defineConfig(({ mode }) => {
                 src: 'icon.svg',
                 sizes: '192x192 512x512',
                 type: 'image/svg+xml',
+                purpose: 'any maskable'
+              },
+              {
+                src: 'icon-192.png',
+                sizes: '192x192',
+                type: 'image/png',
+                purpose: 'any maskable'
+              },
+              {
+                src: 'icon-512.png',
+                sizes: '512x512',
+                type: 'image/png',
                 purpose: 'any maskable'
               }
             ]

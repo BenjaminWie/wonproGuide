@@ -12,7 +12,6 @@ import DocumentDetail from './components/DocumentDetail';
 import LandingPage from './components/LandingPage';
 import FAQView from './components/FAQView';
 import TimelineView from './components/TimelineView';
-import { InstallPWA } from './components/InstallPWA';
 import { gemini } from './services/geminiService';
 import { isNextcloudConfigured, fetchNextcloudDocuments, fetchNextcloudUsers, fetchNextcloudTimeline } from './services/nextcloudService';
 
@@ -24,7 +23,9 @@ const MILESTONE_STORAGE_KEY = 'wohnprojekt_milestone_cache';
 const CATEGORIES_STORAGE_KEY = 'wohnprojekt_categories_cache';
 
 const App: React.FC = () => {
-  const [showLanding, setShowLanding] = useState(true);
+  const [showLanding, setShowLanding] = useState(() => {
+    return localStorage.getItem('wohnpro_landing_seen') !== 'true';
+  });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('chat');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -379,21 +380,20 @@ const App: React.FC = () => {
   };
 
   if (showLanding && !currentUser) {
-    return <LandingPage onStart={() => setShowLanding(false)} />;
+    return (
+      <LandingPage onStart={() => {
+        setShowLanding(false);
+        localStorage.setItem('wohnpro_landing_seen', 'true');
+      }} />
+    );
   }
 
   if (!currentUser) {
-    return (
-      <>
-        <LoginView onLogin={handleLogin} />
-        <InstallPWA />
-      </>
-    );
+    return <LoginView onLogin={handleLogin} />;
   }
 
   return (
     <div className="flex h-screen bg-[#F8FAFC]">
-      <InstallPWA />
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)}

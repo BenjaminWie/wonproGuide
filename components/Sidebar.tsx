@@ -2,6 +2,8 @@
 import React from 'react';
 import { ChatSession, View } from '../types';
 import { ChatIcon, DocIcon, SettingsIcon, ClockIcon, InfoIcon, CloseIcon, CalendarIcon } from './Icons';
+import { Download } from 'lucide-react';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -13,6 +15,8 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sessions, currentView, setView, onSelectSession }) => {
+  const { supportsPWA, promptToInstall, isIOS, isStandalone } = usePWAInstall();
+
   return (
     <>
       {/* Overlay */}
@@ -85,6 +89,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, sessions, currentVie
           </div>
 
           <div className="mt-auto pt-6 border-t border-gray-100 space-y-1">
+            {!isStandalone && (supportsPWA || isIOS) && (
+              <button 
+                className="flex items-center gap-3 w-full p-3 rounded-xl text-blue-600 hover:bg-blue-50 transition-all font-medium mb-2"
+                onClick={() => {
+                  if (supportsPWA) {
+                    promptToInstall();
+                  } else if (isIOS) {
+                    alert('Um die App auf iOS zu installieren, tippen Sie auf das "Teilen" Symbol und dann auf "Zum Home-Bildschirm".');
+                  }
+                }}
+              >
+                <Download className="w-5 h-5" />
+                <span>App installieren</span>
+              </button>
+            )}
             <button 
               className="flex items-center gap-3 w-full p-3 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-black transition-all"
               onClick={() => { setView('admin-docs'); onClose(); }}
